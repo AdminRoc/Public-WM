@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>登录 — CSC·Alliance：Public WM</title>
+  <link rel="icon" type="image/png" href="/picture/websitelogo.png">
+  <style>body{opacity:0} body.fui-in{opacity:1}</style>
+  <!-- 预热 warframe.market 连接：本页指引用户跳 WM 官网登录并复制 JWT，
+       preconnect 让浏览器提前完成 DNS+TCP+TLS 握手，用户点开链接时省 1-2 秒；
+       dns-prefetch 作为不支持 preconnect 时的降级 -->
+  <link rel="preconnect" href="https://warframe.market" crossorigin>
+  <link rel="dns-prefetch" href="https://warframe.market">
+  <!-- CF 人机验证页的脚本从 challenges.cloudflare.com 加载，同样提前握手，
+       让「Just a moment」页本身出来得更快。纯浏览器侧连接提示，
+       不发任何 HTTP 请求，不会被 CF 视为异常流量 -->
+  <link rel="preconnect" href="https://challenges.cloudflare.com" crossorigin>
+  <link rel="dns-prefetch" href="https://challenges.cloudflare.com">
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/fui-core.css">
+  <script src="/js/fui-core.js"></script>
+  <style>
+    /* ══════════════════════════════
+       登录页专属样式（全主题化：gold/cyber/dark/eyecare/minimal）
+       ══════════════════════════════ */
+
+    /* ── 登录页局部主题变量（--lw-*）。
+       页面级背景/卡片/正文色直接吃 main.css 的全站语义变量（--c-card-grad、--c-white 等），
+       这里只定义登录页独有的零件：按钮渐变、输入框、错误框、装饰光效与两级文字通道。
+       gold（默认）按钮定档实心暗金（约 #d9b25f→#b08a34）+ 深棕文字——低透明暗金实测
+       看不清、过亮金档又刺眼（两轮实测结论），中等明度实心暗金是平衡点；
+       强调文字取约 #dfc07d 档，暗金而不荧光。 ── */
+    :root {
+      --lw-accent-text:       #dfc07d;  /* 链接/编号/高亮片段 */
+      --lw-accent-text-hover: #eed9a4;  /* hover 仅略微提亮 */
+      /* 次要文字 / 亮文字通道（RGB 三通道，配 alpha 使用） */
+      --lw-dim:     155,185,220;
+      --lw-text-hi: 225,235,248;
+      /* 登录按钮：实心暗金渐变 + 深棕文字 */
+      --lw-btn-grad:       linear-gradient(135deg, #d9b25f 0%, #b08a34 100%);
+      --lw-btn-hover-grad: linear-gradient(135deg, #e2c172 0%, #bc9340 100%);
+      --lw-btn-border: #d9b25f;
+      --lw-btn-text:   #2a1c04;
+      /* 卡片顶部饰线的中点高光 */
+      --lw-topline-hi: #e8c86a;
+      /* 输入框 */
+      --lw-input-bg:          rgba(0,0,0,.55);
+      --lw-input-focus-bg:    rgba(0,0,0,.68);
+      --lw-input-text:        var(--c-white);
+      --lw-input-placeholder: rgba(96,120,152,.38);
+      /* 错误框（品红系，与全站 --c-sell 同族） */
+      --lw-err-border: rgba(203,74,158,.35);
+      --lw-err-bg:     rgba(203,74,158,.07);
+      --lw-err-text:   #e8a4cf;
+      /* code / kbd 小标签底色 */
+      --lw-code-bg: rgba(0,0,0,.4);
+      --lw-kbd-bg:  rgba(0,0,0,.3);
+      /* 装饰光效开关与渐变（浅色主题压极淡，minimal 直接关闭） */
+      --lw-fx-display: block;
+      --lw-halo-grad:  radial-gradient(ellipse 60% 55% at 50% 50%,
+        rgba(var(--g-mid),.13) 0%, rgba(var(--g-mid),.04) 45%, transparent 70%);
+      --lw-scan-grad:  repeating-linear-gradient(
+        0deg, transparent 0px, transparent 3px,
+        rgba(var(--g-primary),.018) 3px, rgba(var(--g-primary),.018) 4px
+      );
+      --lw-decor-grad: radial-gradient(circle, rgba(var(--g-mid),.08) 0%, transparent 70%);
+    }
+
+    /* 赛博朋克：按钮改电蓝→紫罗兰渐变配白字，装饰光效直接吃 --g-* 通道（蓝/紫），
+       整个页面不再出现任何金色 */
+    html[data-fui-theme="cyber"] {
+      --lw-accent-text:       #7aa8ff;
+      --lw-accent-text-hover: #9dbcff;
+      --lw-dim:     150,170,255;
+      --lw-text-hi: 225,232,255;
+      --lw-btn-grad:       linear-gradient(135deg, #3c78ff 0%, #9633ff 100%);
+      --lw-btn-hover-grad: linear-gradient(135deg, #4d86ff 0%, #a24dff 100%);
+      --lw-btn-border: #5d8cff;
+      --lw-btn-text:   #ffffff;
+      --lw-topline-hi: #9db9ff;
+      --lw-input-placeholder: rgba(130,150,220,.4);
+    }
+
+    /* 暗黑碳素：银灰渐变按钮配深色文字，整体近黑白、彻底去彩色 */
+    html[data-fui-theme="dark"] {
+      --lw-accent-text:       #d0d5de;
+      --lw-accent-text-hover: #e6ebf2;
+      --lw-dim:     160,164,172;
+      --lw-text-hi: 240,242,246;
+      --lw-btn-grad:       linear-gradient(135deg, #d2d8e0 0%, #a6adba 100%);
+      --lw-btn-hover-grad: linear-gradient(135deg, #e2e7ee 0%, #b8bfca 100%);
+      --lw-btn-border: #c6ccd6;
+      --lw-btn-text:   #17181c;
+      --lw-topline-hi: #e2e7ee;
+      --lw-input-bg:          rgba(0,0,0,.4);
+      --lw-input-focus-bg:    rgba(0,0,0,.55);
+      --lw-input-placeholder: rgba(160,164,172,.4);
+    }
+
+    /* 护眼纸质：浅底深字，按钮用暖金棕渐变配米白文字；
+       halo/扫描线/角落光晕压成极淡暖棕，避免破坏纸质底色的干净观感 */
+    html[data-fui-theme="eyecare"] {
+      --lw-accent-text:       #8a6636;
+      --lw-accent-text-hover: #a8823f;
+      --lw-dim:     138,125,104;
+      --lw-text-hi: 74,65,56;
+      --lw-btn-grad:       linear-gradient(135deg, #b08a48 0%, #8a6636 100%);
+      --lw-btn-hover-grad: linear-gradient(135deg, #bd9852 0%, #98723c 100%);
+      --lw-btn-border: #8a6636;
+      --lw-btn-text:   #faf3e4;
+      --lw-topline-hi: #b08a48;
+      --lw-input-bg:          rgba(255,252,245,.75);
+      --lw-input-focus-bg:    #fffdf8;
+      --lw-input-text:        #2f2a22;
+      --lw-input-placeholder: rgba(138,125,104,.55);
+      /* 错误框在浅底上同步调深，保证可读 */
+      --lw-err-border: rgba(168,46,124,.4);
+      --lw-err-bg:     rgba(203,74,158,.08);
+      --lw-err-text:   #8f2a6b;
+      --lw-code-bg: rgba(152,112,58,.08);
+      --lw-kbd-bg:  rgba(152,112,58,.1);
+      --lw-halo-grad:  radial-gradient(ellipse 60% 55% at 50% 50%,
+        rgba(120,95,55,.06) 0%, rgba(120,95,55,.02) 45%, transparent 70%);
+      --lw-scan-grad:  repeating-linear-gradient(
+        0deg, transparent 0px, transparent 3px,
+        rgba(120,95,55,.012) 3px, rgba(120,95,55,.012) 4px
+      );
+      --lw-decor-grad: radial-gradient(circle, rgba(120,95,55,.05) 0%, transparent 70%);
+    }
+
+    /* 极简模式：配色与护眼同源，但装饰光效全部 display:none——纯色平铺、渲染开销最低 */
+    html[data-fui-theme="minimal"] {
+      --lw-accent-text:       #8a6636;
+      --lw-accent-text-hover: #a8823f;
+      --lw-dim:     138,125,104;
+      --lw-text-hi: 74,65,56;
+      --lw-btn-grad:       linear-gradient(135deg, #b08a48 0%, #8a6636 100%);
+      --lw-btn-hover-grad: linear-gradient(135deg, #bd9852 0%, #98723c 100%);
+      --lw-btn-border: #8a6636;
+      --lw-btn-text:   #faf3e4;
+      --lw-topline-hi: #b08a48;
+      --lw-input-bg:          #f8f1e2;
+      --lw-input-focus-bg:    #fffdf8;
+      --lw-input-text:        #2f2a22;
+      --lw-input-placeholder: rgba(138,125,104,.55);
+      --lw-err-border: rgba(168,46,124,.4);
+      --lw-err-bg:     rgba(203,74,158,.08);
+      --lw-err-text:   #8f2a6b;
+      --lw-code-bg: rgba(152,112,58,.08);
+      --lw-kbd-bg:  rgba(152,112,58,.1);
+      --lw-fx-display: none;
+    }
+
+    body { overflow: hidden; }
+
+    /* 页面容器：flex + 子元素 margin:auto 居中。
+       不用 align-items:center —— 内容比容器高时，flex 居中会把顶部裁出
+       可视区且滚不回来；margin:auto 在空间不足时自动退化为顶部对齐，
+       配合 overflow-y:auto 保证任何高度下都完整可见。 */
+    .bw-login-page {
+      position: fixed; top: 62px; left: 0; right: 0; bottom: 0; z-index: 2;
+      display: flex;
+      padding: 1rem 0;
+      opacity: .95;
+      overflow-y: auto;
+    }
+
+    /* 中心放射状大光晕（渐变/开关走 --lw-*：eyecare 极淡暖棕、minimal 直接关闭） */
+    .bw-login-halo {
+      display: var(--lw-fx-display);
+      position: fixed; inset: 0; pointer-events: none;
+      background: var(--lw-halo-grad);
+      animation: haloBreath 5s ease-in-out infinite;
+    }
+    @keyframes haloBreath {
+      0%,100% { transform: scale(1);    opacity: .8; }
+      50%      { transform: scale(1.08); opacity: 1; }
+    }
+
+    /* 横向扫描线背景（同上，浅色主题极淡、minimal 关闭） */
+    .bw-login-scan {
+      display: var(--lw-fx-display);
+      position: fixed; inset: 0; pointer-events: none;
+      background: var(--lw-scan-grad);
+    }
+
+    /* 斜向角落装饰光（同上） */
+    .bw-login-corner-glow {
+      display: var(--lw-fx-display);
+      position: fixed; pointer-events: none;
+      width: 300px; height: 300px; border-radius: 50%;
+      background: var(--lw-decor-grad);
+    }
+    .bw-login-corner-glow.tl { top: -100px; left: -100px; }
+    .bw-login-corner-glow.br { bottom: -100px; right: -100px; }
+
+    /* ── 卡片 ──
+       背景直接吃全站 --c-card-grad：eyecare/minimal 才能拿到暖米白浅卡片，
+       而不是浅底上突兀地扣一块深蓝卡片 */
+    .bw-login-card {
+      position: relative; z-index: 1;
+      margin: auto; /* 居中 + 防顶部裁切的关键 */
+      width: 460px; max-width: calc(100vw - 2rem);
+      background: var(--c-card-grad);
+      border: 1px solid rgba(var(--g-deep),.22);
+      box-shadow: var(--shadow-panel);
+      overflow: hidden;
+      opacity: 0; transform: translateY(32px) scale(.97);
+      animation: cardIn .72s cubic-bezier(.22,.68,0,1.12) .08s forwards;
+    }
+    @keyframes cardIn {
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* 顶部饰线（中点高光按主题走 --lw-topline-hi） */
+    .bw-login-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(var(--g-primary),.7) 25%,
+        var(--lw-topline-hi) 50%,
+        rgba(var(--g-primary),.7) 75%,
+        transparent 100%);
+      box-shadow: 0 0 18px rgba(var(--g-primary),.5);
+    }
+
+    /* 四角装饰括号 */
+    .bw-c { position: absolute; width: 16px; height: 16px; pointer-events: none; }
+    .bw-c-tl { top: 0; left: 0;
+      border-top: 2px solid rgba(var(--g-primary),.6); border-left: 2px solid rgba(var(--g-primary),.6); }
+    .bw-c-tr { top: 0; right: 0;
+      border-top: 2px solid rgba(var(--g-primary),.6); border-right: 2px solid rgba(var(--g-primary),.6); }
+    .bw-c-bl { bottom: 0; left: 0;
+      border-bottom: 2px solid rgba(var(--g-primary),.6); border-left: 2px solid rgba(var(--g-primary),.6); }
+    .bw-c-br { bottom: 0; right: 0;
+      border-bottom: 2px solid rgba(var(--g-primary),.6); border-right: 2px solid rgba(var(--g-primary),.6); }
+
+    /* ── Hero 区：logo + 标题 ── */
+    .bw-login-hero {
+      padding: 1.1rem 1.6rem .75rem;
+      text-align: center;
+      border-bottom: 1px solid rgba(var(--g-deep),.12);
+      background: linear-gradient(180deg, rgba(var(--g-primary),.055) 0%, transparent 100%);
+      opacity: 0;
+      animation: heroIn .6s ease .35s forwards;
+    }
+    @keyframes heroIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .bw-login-logo-img {
+      width: 44px; height: 44px; object-fit: contain;
+      margin: 0 auto .5rem;
+      display: block;
+      filter: drop-shadow(0 0 14px rgba(var(--g-primary),.6)) drop-shadow(0 0 32px rgba(var(--g-primary),.25));
+      opacity: 0; transform: scale(.75);
+      animation: logoIn .65s cubic-bezier(.34,1.5,.64,1) .5s forwards;
+    }
+    @keyframes logoIn {
+      to { opacity: 1; transform: scale(1); }
+    }
+    .bw-login-title {
+      font-family: var(--f-main); font-weight: 900; font-size: 1.15rem;
+      letter-spacing: .18em; text-transform: uppercase;
+      color: var(--c-gold-bright);
+      text-shadow: 0 0 28px rgba(var(--g-primary),.55), 0 0 56px rgba(var(--g-primary),.2);
+      opacity: 0;
+      animation: fadeUp .5s ease .7s forwards;
+    }
+    .bw-login-sub {
+      font-family: var(--f-main); font-size: .6rem; font-weight: 600;
+      letter-spacing: .2em; text-transform: uppercase;
+      color: rgba(var(--lw-dim),.38); margin-top: .2rem;
+      opacity: 0;
+      animation: fadeUp .5s ease .8s forwards;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── 表单区 ── */
+    .bw-login-body {
+      padding: 1.15rem 1.7rem 1.3rem;
+      opacity: 0;
+      animation: fadeUp .5s ease .9s forwards;
+    }
+
+    .bw-field { margin-bottom: .8rem; }
+    .bw-field label {
+      display: block; font-size: .68rem; font-weight: 700;
+      color: rgba(var(--lw-dim),.5); margin-bottom: .35rem;
+      letter-spacing: .1em; text-transform: uppercase;
+    }
+    .bw-field input {
+      width: 100%; padding: .58rem .85rem;
+      background: var(--lw-input-bg);
+      border: 1px solid rgba(var(--g-deep),.2);
+      border-radius: 0;
+      color: var(--lw-input-text); font-family: var(--f-main); font-size: .92rem;
+      transition: border-color .22s, box-shadow .22s, background .22s;
+    }
+    .bw-field input::placeholder { color: var(--lw-input-placeholder); }
+    .bw-field input:focus {
+      outline: none;
+      border-color: rgba(var(--g-primary),.62);
+      background: var(--lw-input-focus-bg);
+      box-shadow: 0 0 0 3px rgba(var(--g-primary),.07), inset 3px 0 0 rgba(var(--g-primary),.55);
+    }
+
+    /* 登录按钮：实心渐变 + 高对比文字（低透明度方案实测看不清，2026-07-18 改；
+       亮金档又被批刺眼，故定档中等明度实心暗金，配色按主题走 --lw-btn-* 变量） */
+    .bw-login-btn {
+      width: 100%; padding: .8rem;
+      margin-top: .35rem;
+      background: var(--lw-btn-grad);
+      border: 1px solid var(--lw-btn-border);
+      border-radius: 0;
+      color: var(--lw-btn-text);
+      font-family: var(--f-main); font-weight: 900;
+      font-size: .92rem; letter-spacing: .2em; text-transform: uppercase;
+      cursor: pointer; position: relative; overflow: hidden;
+      transition: background .22s, box-shadow .22s, filter .22s, transform .1s;
+    }
+    .bw-login-btn::before {
+      content: '';
+      position: absolute; top: -100%; left: -60%; width: 40%; height: 300%;
+      background: linear-gradient(108deg, transparent 30%, rgba(255,255,255,.35) 50%, transparent 70%);
+      transition: transform .45s ease;
+    }
+    /* hover 仅略微提亮 + 主色柔光，不再上刺眼的亮金档 */
+    .bw-login-btn:hover {
+      background: var(--lw-btn-hover-grad);
+      box-shadow: 0 0 30px rgba(var(--g-primary),.35), 0 0 60px rgba(var(--g-primary),.15);
+      filter: drop-shadow(0 0 12px rgba(var(--g-primary),.4));
+    }
+    .bw-login-btn:hover::before { transform: translateX(380%); }
+    .bw-login-btn:active { transform: scale(.992); }
+    .bw-login-btn:disabled { opacity: .55; cursor: default; pointer-events: none; }
+
+    /* JWT 登录按钮：与主按钮同款主题渐变（已是登录主路径之一），仅尺寸收敛 */
+    .bw-jwt-btn {
+      padding: .62rem; margin-top: .55rem;
+      font-size: .78rem; letter-spacing: .14em;
+    }
+
+    /* 错误（浅色主题下 --lw-err-* 已同步调深） */
+    .bw-login-err {
+      margin-top: .7rem; padding: .55rem .85rem;
+      border: 1px solid var(--lw-err-border);
+      background: var(--lw-err-bg);
+      color: var(--lw-err-text); font-size: .78rem; line-height: 1.5;
+      display: none;
+    }
+    .bw-login-err.show { display: block; }
+
+    /* 底部 */
+    .bw-login-footer {
+      margin-top: .9rem; text-align: center;
+      color: rgba(var(--lw-dim),.28); font-size: .64rem;
+      letter-spacing: .06em; line-height: 1.7;
+      border-top: 1px solid rgba(var(--g-deep),.08);
+      padding-top: .7rem;
+    }
+    .bw-login-footer b { color: rgba(var(--g-primary),.38); font-weight: 400; }
+
+    /* ── JWT 兜底区（默认隐藏，登录失败或手动点击时展开） ── */
+    .bw-login-mode { display: none; }
+    .bw-login-mode.active { display: block; }
+
+    .bw-login-alt {
+      margin: .6rem 0 0; text-align: center;
+      font-size: .62rem; color: rgba(var(--lw-text-hi),.75); line-height: 1.6;
+    }
+    .bw-login-alt-link {
+      color: var(--lw-accent-text); cursor: pointer;
+      border-bottom: 1px dashed rgba(var(--g-primary),.55);
+      transition: color .2s, border-color .2s;
+    }
+    .bw-login-alt-link:hover { color: var(--lw-accent-text-hover); border-bottom-color: var(--lw-accent-text); }
+
+    /* 外链（新窗口打开）：强调文字档，2026-07-18 低亮度方案实测看不清、亮金档又刺眼，
+       故统一走 --lw-accent-text（gold 下约 #dfc07d 的暗金，不荧光） */
+    .bw-ext-link {
+      color: var(--lw-accent-text); font-weight: 700; text-decoration: none;
+      border-bottom: 1px solid rgba(var(--g-primary),.55);
+      transition: color .2s, border-color .2s, text-shadow .2s;
+    }
+    .bw-ext-link:hover {
+      color: var(--lw-accent-text-hover); border-bottom-color: var(--lw-accent-text);
+      text-shadow: 0 0 10px rgba(var(--g-primary),.6);
+    }
+
+    /* JWT 区容器 */
+    .bw-jwt-panel {
+      margin-top: .85rem; padding-top: .85rem;
+      border-top: 1px dashed rgba(var(--g-deep),.25);
+    }
+    .bw-jwt-quick {
+      font-size: .72rem; color: rgba(var(--lw-text-hi),.88); line-height: 1.7;
+      margin: 0 0 .55rem;
+    }
+    .bw-jwt-quick code {
+      font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+      font-size: .68rem; color: var(--lw-accent-text);
+      background: var(--lw-code-bg); padding: 0 .3em; border: 1px solid rgba(var(--g-deep),.18);
+    }
+
+    /* 图文步骤收折 */
+    .bw-jwt-details { margin-bottom: .6rem; }
+    .bw-jwt-details summary {
+      cursor: pointer; list-style: none;
+      font-size: .68rem; color: var(--lw-accent-text);
+      letter-spacing: .05em;
+      padding: .3rem 0;
+      transition: color .2s;
+    }
+    .bw-jwt-details summary::before { content: '▸ '; }
+    .bw-jwt-details[open] summary::before { content: '▾ '; }
+    .bw-jwt-details summary::-webkit-details-marker { display: none; }
+    .bw-jwt-details summary:hover { color: var(--lw-accent-text-hover); }
+
+    .bw-jwt-hint {
+      font-size: .7rem; color: rgba(var(--lw-text-hi),.85); line-height: 1.65;
+      padding: .55rem .75rem;
+      border: 1px solid rgba(var(--g-deep),.1);
+      background: rgba(var(--g-primary),.025);
+    }
+    .bw-jwt-hint b { color: var(--lw-accent-text); font-weight: 600; }
+    .bw-jwt-hint code {
+      font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+      font-size: .64rem; color: var(--lw-accent-text);
+      background: var(--lw-code-bg); padding: 0 .3em; border: 1px solid rgba(var(--g-deep),.18);
+    }
+    .bw-jwt-steps {
+      margin: .35rem 0 0; padding: 0; list-style: none; counter-reset: jwt-step;
+    }
+    .bw-jwt-steps li {
+      counter-increment: jwt-step; padding: .08rem 0 .08rem 1.25rem; position: relative;
+    }
+    .bw-jwt-steps li::before {
+      content: counter(jwt-step);
+      position: absolute; left: 0; top: .1rem;
+      width: .9rem; height: .9rem; line-height: .9rem;
+      text-align: center; font-size: .53rem; font-weight: 700;
+      color: var(--lw-accent-text);
+      border: 1px solid rgba(var(--g-primary),.55);
+      border-radius: 50%;
+    }
+    .bw-jwt-steps kbd {
+      font-family: var(--f-main); font-size: .55rem;
+      color: rgba(var(--lw-text-hi),.95);
+      border: 1px solid rgba(var(--lw-text-hi),.45);
+      background: var(--lw-kbd-bg);
+      padding: .05em .35em; border-radius: 2px;
+    }
+
+    /* ── 备用方案：官网登录 + 书签一键回传 ── */
+    .bw-bm-panel {
+      margin-top: .7rem; padding: .65rem .8rem .6rem;
+      border: 1px dashed rgba(var(--g-deep),.3);
+      background: rgba(var(--g-primary),.03);
+    }
+    .bw-bm-title {
+      margin: 0 0 .45rem; text-align: center;
+      font-size: .62rem; color: rgba(var(--g-primary),.65); letter-spacing: .05em;
+    }
+    .bw-bm-steps {
+      margin: 0; padding: 0 0 0 1.15rem;
+      font-size: .68rem; color: rgba(var(--lw-dim),.65); line-height: 1.8;
+    }
+    .bw-bm-steps b { color: rgba(var(--g-primary),.8); font-weight: 600; }
+    .bw-bm-note { font-size: .58rem; color: rgba(var(--lw-dim),.42); }
+    .bw-bm-link {
+      display: inline-block; margin-top: .3rem; padding: .42rem .95rem;
+      border: 1px solid rgba(var(--g-primary),.6); border-radius: 5px;
+      background: rgba(var(--g-primary),.12); color: var(--c-gold-bright);
+      font-size: .72rem; font-weight: 700; text-decoration: none; cursor: grab;
+    }
+
+    /* ── 矮屏适配：视口高度不足时进一步压缩 ── */
+    @media (max-height: 720px) {
+      .bw-login-hero { padding: .75rem 1.6rem .55rem; }
+      .bw-login-logo-img { width: 36px; height: 36px; margin-bottom: .4rem; }
+      .bw-login-title { font-size: 1rem; }
+      .bw-login-sub { font-size: .55rem; margin-top: .12rem; }
+      .bw-login-body { padding: .9rem 1.6rem 1.05rem; }
+      .bw-field { margin-bottom: .6rem; }
+      .bw-login-footer { margin-top: .7rem; padding-top: .55rem; line-height: 1.55; }
+    }
+    @media (max-height: 540px) {
+      .bw-login-logo-img { display: none; }
+      .bw-login-hero { padding: .55rem 1.6rem .45rem; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="star-canvas"></canvas>
+  <div class="nebula-bg"></div>
+  <div class="bw-login-halo"></div>
+  <div class="bw-login-scan"></div>
+  <div class="bw-login-corner-glow tl"></div>
+  <div class="bw-login-corner-glow br"></div>
+
+  <header class="bw-header">
+    <div class="bw-header-row">
+      <div class="bw-htab bw-brand" style="flex:0 0 auto; padding:0 1.6rem;">
+        <img src="/picture/WS-logo-2.png" class="bw-brand-logo-img" alt="WS">
+        <div class="bw-brand-text">
+          <span class="bw-brand-cn">CSC·Alliance</span>
+          <span class="bw-brand-sub">PUBLIC <span class="bw-brand-wm">WM</span></span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="bw-wf-bg" aria-hidden="true"><img src="/picture/warframe-logo-blue-black.svg" alt=""></div>
+
+  <div class="bw-login-page">
+    <form class="bw-login-card" id="bw-login-form" autocomplete="on">
+      <!-- 角标 -->
+      <span class="bw-c bw-c-tl"></span>
+      <span class="bw-c bw-c-tr"></span>
+      <span class="bw-c bw-c-bl"></span>
+      <span class="bw-c bw-c-br"></span>
+
+      <!-- Hero -->
+      <div class="bw-login-hero">
+        <img src="/picture/WS-logo-2.png" class="bw-login-logo-img" alt="CSC Alliance">
+        <div class="bw-login-title">Public WM</div>
+        <div class="bw-login-sub">CSC · Alliance &nbsp;·&nbsp; 公开工具</div>
+      </div>
+
+      <!-- 表单 -->
+      <div class="bw-login-body">
+        <!-- 主流程：Worker 直连无感登录；被 CF 拦截时自动展开下方手动 JWT 图文指引 -->
+        <div class="bw-field">
+          <label for="bw-email">邮箱</label>
+          <input type="email" id="bw-email" name="email" required autocomplete="username" placeholder="your@email.com">
+        </div>
+        <div class="bw-field">
+          <label for="bw-pass">口令</label>
+          <input type="password" id="bw-pass" name="password" required autocomplete="current-password" placeholder="••••••••">
+        </div>
+
+        <button type="submit" class="bw-login-btn" id="bw-login-btn">进入系统</button>
+
+        <p class="bw-login-alt">验证不通过？<span class="bw-login-alt-link" id="bw-jwt-toggle">改用 JWT 登录 →</span></p>
+
+        <!-- JWT 兜底：默认隐藏，登录返回错误或手动点击时展开 -->
+        <div class="bw-login-mode" id="bw-mode-jwt">
+          <div class="bw-jwt-panel">
+            <p class="bw-jwt-quick">
+              在已登录 <a class="bw-ext-link" href="https://warframe.market/auth/signin" target="_blank" rel="noopener noreferrer">warframe.market ↗</a> 的浏览器里，从 Cookie 中复制 <code>JWT</code> 的值粘贴到下方。
+              账号密码仍需填写，用于验证身份。
+            </p>
+            <details class="bw-jwt-details" id="bw-jwt-details">
+              <summary>展开图文步骤（7 步）</summary>
+              <div class="bw-jwt-hint">
+                <b>如何获取 JWT：</b>
+                <ol class="bw-jwt-steps">
+                  <li>在浏览器中打开 <a class="bw-ext-link" href="https://warframe.market/auth/signin" target="_blank" rel="noopener noreferrer">warframe.market ↗</a> 并完成登录</li>
+                  <li>按 <kbd>F12</kbd> 打开开发者工具（DevTools）</li>
+                  <li>切换到 <b>Application</b> / <b>应用程序</b> 标签页</li>
+                  <li>左侧找到 <b>Cookies</b> 一栏，点击下方的 <code>https://warframe.market</code></li>
+                  <li>右侧表格中找到 <b>Name</b> / <b>名称</b> 列为 <code>JWT</code> 的行</li>
+                  <li>双击该行的 <b>Value</b> / <b>值</b> 列，全选后 <kbd>Ctrl+C</kbd> 复制</li>
+                  <li>将复制的值完整粘贴到下方输入框中</li>
+                </ol>
+              </div>
+            </details>
+            <div class="bw-field">
+              <label for="bw-jwt">WM JWT Token</label>
+              <input type="text" id="bw-jwt" name="jwt" placeholder="粘贴 WM JWT">
+            </div>
+            <button type="button" class="bw-login-btn bw-jwt-btn" id="bw-jwt-btn">使用 JWT 登录</button>
+          </div>
+        </div>
+
+        <div class="bw-login-err" id="bw-login-err"></div>
+
+        <div class="bw-login-footer">
+          <b>◆</b> 使用你的 Warframe.market 账号登录 <b>◆</b><br>
+          登录信息不会存储，仅用于验证身份<br>
+          本页面建立原因是：WM主站在国内的普遍访问缓慢问题
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- 登录失败提示要复用 shared.js 里的 WM 错误翻译 window.bwWmErrorText：
+       先置 __bwUtilsOnly，shared.js 检测到该标记后跳过会话检查、
+       glitch 音效、导航绑定等页面副作用（登录页没有会话、没有导航栏） -->
+  <script>window.__bwUtilsOnly = true;</script>
+  <script src="/js/vendor/gsap/gsap.min.js"></script>
+  <script src="/js/vendor/gsap/ScrollTrigger.min.js"></script>
+  <script src="/js/shared.js"></script>
+  <script src="/js/login.js"></script>
+  <script>
+    (function () {
+      var img = document.querySelector('.bw-wf-bg img');
+      if (!img) return;
+      function trigger() {
+        img.classList.add('glitching');
+        setTimeout(function () { img.classList.remove('glitching'); }, 560);
+        setTimeout(trigger, 2000 + Math.random() * 3000);
+      }
+      setTimeout(trigger, 2000 + Math.random() * 3000);
+    })();
+  </script>
+</body>
+</html>

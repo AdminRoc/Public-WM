@@ -1,0 +1,73 @@
+name: 刷新全量均价数据
+
+# 每小时从 WM v2 API 重新拉取全量均价，覆盖 data/avg_prices_full.json。
+# 脚本已入库（.github/scripts/fetch_avg_prices.py，由 Private-WM/Ws-Web-core
+# 迁移而来），并发 12 + 0.4~1.0s 间隔，单次约 8~12 分钟，远低于 1 小时周期。
+# 产物提交到 Public-WM 仓库 main 分支后，各消费端经 jsDelivr 引用：
+#   https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/avg_prices_full.json
+# 腾讯云 Pages 的 GitHub 集成监听 main 分支 push，会自动触发静态站点重新构建。
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 * * * *'   # 每小时第 30 分钟触发，脚本内另有 0~3min 随机延迟
+
+concurrency:
+  group: refresh-avg-prices
+  cancel-in-progress: true   # 上一轮未跑完时直接取消，避免积压排队
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: 安装依赖
+        run: pip install aiohttp -q
+
+      - name: 拉取均价数据
+        run: python3 .github/scripts/fetch_avg_prices.py
+        env:
+          AVG_PRICES_OUT: data/avg_prices_full.json
+
+      - name: 提交并推送
+        id: commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/avg_prices_full.json
+          if git diff --staged --quiet; then
+            echo "无变动，跳过提交"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -m "data: refresh avg_prices_full.json [skip ci]"
+          for i in 1 2 3 4 5; do
+            if git push; then
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            cp data/avg_prices_full.json /tmp/avg_prices_full.json
+            git rebase --abort 2>/dev/null || true
+            git fetch origin main
+            git reset --hard origin/main
+            cp /tmp/avg_prices_full.json data/avg_prices_full.json
+            git add data/avg_prices_full.json
+            git commit -m "data: refresh avg_prices_full.json [skip ci]"
+            sleep "$(( (RANDOM % 4) + 2 ))"
+          done
+          exit 1
+
+      # jsDelivr 的 @main 会跟随最新 commit，但 CDN 缓存有延迟；
+      # 提交后主动 purge，强制 jsDelivr 立即回源最新产物。
+      # 注：全新仓库首索引未完成前 purge 也拿不到文件（页面有 raw 回退兜底），
+      # 首次索引完成后本步骤保证每次刷新即刻生效。
+      - name: 刷新 jsDelivr 缓存（均价）
+        if: steps.commit.outputs.changed == 'true'
+        run: |
+          curl -s "https://purge.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/avg_prices_full.json" || true

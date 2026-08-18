@@ -1,0 +1,68 @@
+name: 刷新拍卖字典
+
+# 拉取 WM 拍卖字典（裂罅Mod / 玄骸 / 姐妹）合并成 data/auction-dicts.json。
+# 脚本：.github/scripts/harvest_auction_dicts.py（无需额外依赖）。
+# 产物提交到 main 后，拍卖页（auctions.html）经 jsDelivr 引用：
+#   https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/auction-dicts.json
+# 由于腾讯云 Pages 为手动低频部署，页面必须读 jsDelivr 上的最新产物，
+# 而不能读已部署的静态快照，避免部署间隔期内数据过时。
+# 字典变化极低频：workflow_dispatch 手动触发即可，另加每周一次兜底。
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1'   # 每周一 03:00
+
+concurrency:
+  group: harvest-auction-dicts
+  cancel-in-progress: true
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: 拉取拍卖字典
+        run: python3 .github/scripts/harvest_auction_dicts.py
+        env:
+          AUCTION_DICTS_OUT: data/auction-dicts.json
+
+      - name: 提交并推送
+        id: commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/auction-dicts.json
+          if git diff --staged --quiet; then
+            echo "无变动，跳过提交"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -m "data: refresh auction-dicts.json [skip ci]"
+          for i in 1 2 3 4 5; do
+            if git push; then
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            cp data/auction-dicts.json /tmp/auction-dicts.json
+            git rebase --abort 2>/dev/null || true
+            git fetch origin main
+            git reset --hard origin/main
+            cp /tmp/auction-dicts.json data/auction-dicts.json
+            git add data/auction-dicts.json
+            git commit -m "data: refresh auction-dicts.json [skip ci]"
+            sleep "$(( (RANDOM % 4) + 2 ))"
+          done
+          exit 1
+
+      # jsDelivr @main 缓存延迟，提交后主动 purge 立即回源最新产物。
+      - name: 刷新 jsDelivr 缓存（拍卖字典）
+        if: steps.commit.outputs.changed == 'true'
+        run: |
+          curl -s "https://purge.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/auction-dicts.json" || true

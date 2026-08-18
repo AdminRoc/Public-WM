@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>拍卖功能 — CSC·Alliance：Public WM</title>
+  <link rel="icon" type="image/png" href="/picture/websitelogo.png">
+  <style>body{opacity:0}</style>
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/fui-core.css">
+  <script src="/js/fui-core.js"></script>
+</head>
+<body>
+  <canvas id="star-canvas"></canvas>
+  <div class="nebula-bg"></div>
+
+  <header class="bw-header">
+    <div class="bw-header-row">
+      <a href="/" class="bw-htab bw-brand" title="返回主页"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span>
+        <img src="/picture/WS-logo-2.png" class="bw-brand-logo-img" alt="WS">
+        <div class="bw-brand-text">
+          <span class="bw-brand-cn">CSC·Alliance</span>
+          <span class="bw-brand-sub">PUBLIC <span class="bw-brand-wm">WM</span></span>
+        </div>
+        <span class="bw-brand-hover-label">重返主页</span>
+      </a>
+      <span class="bw-nav-slash" aria-hidden="true"></span>
+      <a href="https://world.wfspeed.run" target="_blank" rel="noopener" class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">世界状态</span></a>
+      <span class="bw-nav-slash" aria-hidden="true"></span>
+      <a href="https://eelog.wfspeed.run"      target="_blank" rel="noopener" class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">日志分析</span></a>
+      <span class="bw-nav-slash" aria-hidden="true"></span>
+      <a href="https://item.wfspeed.run"        target="_blank" rel="noopener" class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">物品查询</span></a>
+      <span class="bw-nav-slash" aria-hidden="true"></span>
+      <a href="https://relic.wfspeed.run"            target="_blank" rel="noopener" class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">核桃溯源</span></a>
+      <span class="bw-nav-slash" aria-hidden="true"></span>
+      <a href="https://wenxin.baidu.com/?enter_type=chat_site" target="_blank" rel="noopener" class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">人工智能</span></a>
+      <span class="bw-nav-slash" aria-hidden="true"></span>
+      <a href="/auctions" class="bw-htab bw-nav-link is-current"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">拍卖功能</span></a>
+      <span class="bw-nav-slash" aria-hidden="true"></span>
+      <button class="bw-htab bw-nav-link" id="bw-logout-btn" title="退出登录"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">登出账号</span></button>
+      <button class="bw-hamburger" id="bw-hamburger" aria-label="导航菜单" aria-expanded="false">
+        <span class="bw-tab-fill"></span>
+        <span class="bw-hamburger-icon"><span></span><span></span><span></span></span>
+      </button>
+    </div>
+  </header>
+  <div class="bw-drawer-overlay" id="bw-drawer-overlay" aria-hidden="true"></div>
+  <nav class="bw-drawer" id="bw-drawer" aria-label="移动端导航">
+    <div class="bw-drawer-head">
+      <img src="/picture/WS-logo-2.png" class="bw-drawer-head-logo" alt="WS">
+      <div><span class="bw-drawer-head-cn">CSC·Alliance</span><span class="bw-drawer-head-sub">PUBLIC <span class="bw-brand-wm">WM</span></span></div>
+    </div>
+    <div class="bw-drawer-nav">
+      <a href="/"    class="bw-drawer-link">主页</a>
+      <a href="https://world.wfspeed.run" target="_blank" rel="noopener" class="bw-drawer-link">世界状态</a>
+      <a href="https://eelog.wfspeed.run"      target="_blank" rel="noopener" class="bw-drawer-link">日志分析</a>
+      <a href="https://item.wfspeed.run"        target="_blank" rel="noopener" class="bw-drawer-link">物品查询</a>
+      <a href="https://relic.wfspeed.run"            target="_blank" rel="noopener" class="bw-drawer-link">核桃溯源</a>
+      <a href="https://wenxin.baidu.com/?enter_type=chat_site" target="_blank" rel="noopener" class="bw-drawer-link">人工智能</a>
+      <div class="bw-drawer-sep"></div>
+      <a href="/auctions"   class="bw-drawer-link is-current">拍卖功能</a>
+    </div>
+    <div class="bw-drawer-logout">
+      <button class="bw-drawer-logout-btn" id="bw-drawer-logout-btn">登出账号</button>
+    </div>
+  </nav>
+
+  <div class="bw-confirm-overlay" id="bw-logout-confirm" aria-hidden="true">
+    <div class="bw-confirm-box">
+      <span class="bw-c bw-c-tl"></span><span class="bw-c bw-c-tr"></span>
+      <span class="bw-c bw-c-bl"></span><span class="bw-c bw-c-br"></span>
+      <div class="bw-confirm-icon">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </div>
+      <div class="bw-confirm-title">确认登出账号？</div>
+      <div class="bw-confirm-sub">登出后需重新输入邮箱与口令验证身份</div>
+      <div class="bw-confirm-actions">
+        <button class="bw-confirm-btn bw-confirm-cancel" id="bw-confirm-cancel">取消</button>
+        <button class="bw-confirm-btn bw-confirm-ok" id="bw-confirm-ok">确认登出</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 通用确认框（下架等危险操作复用） -->
+  <div class="bw-confirm-overlay" id="bw-auc-confirm" aria-hidden="true">
+    <div class="bw-confirm-box">
+      <span class="bw-c bw-c-tl"></span><span class="bw-c bw-c-tr"></span>
+      <span class="bw-c bw-c-bl"></span><span class="bw-c bw-c-br"></span>
+      <div class="bw-confirm-icon">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <div class="bw-confirm-title" id="bw-auc-confirm-title">确认操作</div>
+      <div class="bw-confirm-sub" id="bw-auc-confirm-sub"></div>
+      <div class="bw-confirm-actions">
+        <button class="bw-confirm-btn bw-confirm-cancel" id="bw-auc-confirm-cancel">取消</button>
+        <button class="bw-confirm-btn bw-confirm-ok" id="bw-auc-confirm-ok">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="bw-wf-bg" aria-hidden="true"><img src="/picture/warframe-logo-blue-black.svg" alt=""></div>
+
+  <main class="page-wrap bw-wrap">
+    <section class="bw-tr-panel bw-auc-panel">
+      <span class="bw-c bw-c-tl"></span><span class="bw-c bw-c-tr"></span>
+      <span class="bw-c bw-c-bl"></span><span class="bw-c bw-c-br"></span>
+
+      <!-- 类型 tab ＋ 功能模式 ＋ 语言切换 -->
+      <div class="bw-auc-tabs-row">
+        <div class="bw-auc-tabs">
+          <button class="bw-type-pill active" data-atype="riven">裂罅Mod</button>
+          <button class="bw-type-pill" data-atype="lich">赤毒玄骸</button>
+          <button class="bw-type-pill" data-atype="sister">帕尔沃斯的姐妹</button>
+        </div>
+        <div class="bw-auc-mode-tabs">
+          <button class="bw-auc-mode-btn active" data-mode="search">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            搜索拍卖
+          </button>
+          <button class="bw-auc-mode-btn" data-mode="manage">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            管理我的拍卖
+          </button>
+        </div>
+        <button class="bw-lang-btn" id="bw-auc-lang-btn" title="切换武器/词条名称显示语言（中↔EN）" aria-label="切换语言">
+          <span class="bw-lang-inner">
+            <span class="bw-lang-seg active" id="bw-auc-lang-zh">中</span>
+            <span class="bw-lang-seg" id="bw-auc-lang-en">EN</span>
+          </span>
+        </button>
+      </div>
+
+      <!-- ══ 搜索模式内容 ══ -->
+      <div id="bw-auc-search-zone">
+        <!-- 筛选器（按类型动态渲染） -->
+        <div class="bw-auc-filters" id="bw-auc-filters"></div>
+
+        <div class="bw-auc-search-row">
+          <button class="bw-drawer-btn-update bw-auc-search-btn" id="bw-auc-search-btn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span>搜索拍卖</span>
+          </button>
+          <span class="bw-auc-status" id="bw-auc-status"></span>
+        </div>
+      </div>
+
+      <!-- ══ 管理模式内容 ══ -->
+      <div id="bw-auc-manage-zone" style="display:none">
+        <div class="bw-auc-manage-toolbar">
+          <div class="bw-auc-mine-ctrl-row">
+            <input class="bw-auc-mine-kw" id="bw-auc-mine-kw" placeholder="武器名称筛选…" autocomplete="off">
+            <div class="bw-auc-mine-vis-pills">
+              <button class="bw-auc-mine-vis active" data-mvis="all">全部</button>
+              <button class="bw-auc-mine-vis" data-mvis="visible">显示中</button>
+              <button class="bw-auc-mine-vis" data-mvis="hidden">已隐藏</button>
+            </div>
+            <div class="bw-auc-bulk-row">
+              <input class="bw-auc-mine-kw bw-auc-bulk-price" id="bw-auc-bulk-price" type="number" min="1" placeholder="批量改价（白金）">
+              <button class="bw-auc-mgmt-btn" id="bw-auc-bulk-btn">批量改价</button>
+            </div>
+          </div>
+          <div class="bw-auc-manage-actions">
+            <button class="bw-auc-mgmt-btn bw-auc-refresh-btn" id="bw-auc-mine-refresh">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              刷新
+            </button>
+            <button class="bw-auc-mgmt-btn bw-auc-create-primary" id="bw-auc-create-btn">＋ 上架新拍卖</button>
+          </div>
+          <span class="bw-auc-status" id="bw-auc-manage-status"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 我的拍卖列表（仅管理模式） -->
+    <section class="bw-tr-panel bw-auc-panel" id="bw-auc-mine-panel" style="display:none">
+      <div class="bw-inv-section-head">
+        <span class="bw-inv-section-title">我的拍卖（<span id="bw-auc-mine-n">0</span>）</span>
+        <span class="bw-tr-col-hint">当前类型 · 不含已关闭订单</span>
+      </div>
+      <div class="bw-auc-list" id="bw-auc-mine-list"></div>
+    </section>
+
+    <!-- 改价弹窗 -->
+    <div class="bw-auc-modal-overlay" id="bw-auc-edit-modal" style="display:none" aria-hidden="true">
+      <div class="bw-auc-modal">
+        <span class="bw-c bw-c-tl"></span><span class="bw-c bw-c-tr"></span>
+        <span class="bw-c bw-c-bl"></span><span class="bw-c bw-c-br"></span>
+        <div class="bw-auc-modal-title" id="bw-auc-edit-title">改价</div>
+        <div class="bw-auc-modal-field">
+          <label>新价格（白金）</label>
+          <input type="number" min="1" id="bw-auc-edit-price" class="bw-auc-modal-input" placeholder="输入新价格">
+        </div>
+        <div class="bw-auc-modal-field">
+          <label>成交方式</label>
+          <div class="bw-auc-modal-radios">
+            <label><input type="radio" name="bw-auc-edit-type" value="buyout" checked> 一口价</label>
+            <label><input type="radio" name="bw-auc-edit-type" value="starting"> 起拍价</label>
+          </div>
+        </div>
+        <div class="bw-auc-modal-err" id="bw-auc-edit-err"></div>
+        <div class="bw-auc-modal-actions">
+          <button class="bw-auc-modal-cancel" id="bw-auc-edit-cancel">取消</button>
+          <button class="bw-auc-modal-ok" id="bw-auc-edit-ok">确认改价</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 上架弹窗 -->
+    <div class="bw-auc-modal-overlay" id="bw-auc-create-modal" style="display:none" aria-hidden="true">
+      <div class="bw-auc-modal bw-auc-modal-lg">
+        <span class="bw-c bw-c-tl"></span><span class="bw-c bw-c-tr"></span>
+        <span class="bw-c bw-c-bl"></span><span class="bw-c bw-c-br"></span>
+        <button class="bw-auc-modal-close" id="bw-auc-create-close" type="button" title="关闭" aria-label="关闭">
+          <svg viewBox="0 0 10 10" fill="none"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+        <div class="bw-auc-modal-title" id="bw-auc-create-title">上架新拍卖</div>
+        <div id="bw-auc-create-form-wrap"></div>
+        <div class="bw-auc-modal-err" id="bw-auc-create-err"></div>
+        <div class="bw-auc-modal-actions">
+          <button class="bw-auc-modal-cancel" id="bw-auc-create-cancel">取消</button>
+          <button class="bw-auc-modal-ok" id="bw-auc-create-ok">确认上架</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 搜索结果（仅搜索模式） -->
+    <section class="bw-tr-panel bw-auc-panel" id="bw-auc-result-section">
+      <div class="bw-inv-section-head">
+        <span class="bw-inv-section-title">全站拍卖（<span id="bw-auc-result-n">0</span>）</span>
+        <span class="bw-riven-avg-badge" id="bw-auc-riven-avg" style="display:none"></span>
+        <span class="bw-tr-col-hint">点「复制求购」生成游戏内私聊指令，直接粘贴发送</span>
+      </div>
+      <!-- 排序 + 在线状态筛选 -->
+      <div class="bw-auc-result-ctrl">
+        <div class="bw-auc-sort-row">
+          <span class="bw-auc-ctrl-label">排序</span>
+          <button class="bw-auc-sort-btn active" data-sort="price_asc">价格升序</button>
+          <button class="bw-auc-sort-btn" data-sort="price_desc">价格降序</button>
+          <button class="bw-auc-sort-btn bw-auc-sort-damage" data-sort="damage_desc" style="display:none">伤害倒序</button>
+          <button id="bw-auc-online-first-btn" class="bw-auc-sort-btn">在线优先</button>
+        </div>
+      </div>
+      <div class="bw-auc-online-bar">
+        <button class="bw-auc-online-pill active" data-ostatus="all">全部</button>
+        <button class="bw-auc-online-pill" data-ostatus="online">在线</button>
+        <button class="bw-auc-online-pill" data-ostatus="ingame">游戏中</button>
+      </div>
+      <div class="bw-auc-list" id="bw-auc-result-list">
+        <div class="bw-inv-empty">选择条件后点「搜索拍卖」</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="bw-footer">
+    <div class="bw-footer-sep"></div>
+    <div class="bw-footer-inner">
+      <div class="bw-beian-row">
+        <a href="https://beian.miit.gov.cn/" target="_self" rel="noopener">沪ICP备2022033368号</a>
+        <img src="/picture/gongan-beian.png" alt="公安备案" class="bw-beian-icon">
+        <a href="https://beian.mps.gov.cn/#/query/webSearch?code=31015102000215" rel="noreferrer" target="_blank">沪公网安备31015102000215号</a>
+      </div>
+      <p>Copyright &copy; 2026 CSC Alliance All Rights Reserved.</p>
+    </div>
+  </footer>
+
+  <script src="/js/vendor/gsap/gsap.min.js"></script>
+  <script src="/js/vendor/gsap/ScrollTrigger.min.js"></script>
+  <script src="/js/shared.js"></script>
+  <script src="/js/auctions.js"></script>
+</body>
+</html>

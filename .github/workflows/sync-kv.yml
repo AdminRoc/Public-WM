@@ -1,0 +1,61 @@
+name: 同步数据到 EdgeOne KV
+
+# 将本仓库 data/ 下的最新产物（均价/拍卖字典/物品总表）写入 EdgeOne Makers KV，
+# 前端经 market.wfspeed.run/api/kv?key=... 同源读取（大陆可达、实时、毫秒级），
+# 不再依赖 jsDelivr / raw / 反复构建部署的静态快照。
+# 需要仓库 Secrets：KV_WRITE_TOKEN（与边缘函数环境变量同值）。
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["刷新全量均价数据", "刷新拍卖字典", "刷新物品总表"]
+    types: [completed]
+
+concurrency:
+  group: sync-kv
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: 写入 EdgeOne KV
+        env:
+          KV_WRITE_TOKEN: ${{ secrets.KV_WRITE_TOKEN }}
+        run: |
+          set +e
+          fail=0
+          declare -A FILES=(
+            ["avg_prices_full_json"]="data/avg_prices_full.json"
+            ["auction_dicts_json"]="data/auction-dicts.json"
+            ["wm_items_json"]="data/wm-items.json"
+          )
+          for key in "${!FILES[@]}"; do
+            src="${FILES[$key]}"
+            if [ ! -f "$src" ]; then
+              echo "skip $key ($src 不存在)"
+              continue
+            fi
+            python3 -c "import json; content=open('$src').read(); open('/tmp/kv-payload.json','w').write(json.dumps({'key':'$key','value':content}))"
+            code=""
+            for attempt in 1 2 3; do
+              code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 300 \
+                -X POST "https://market.wfspeed.run/api/update-kv" \
+                -H "Authorization: Bearer ${KV_WRITE_TOKEN}" \
+                -H "Content-Type: application/json" \
+                --data-binary "@/tmp/kv-payload.json")
+              if [ "$code" = "200" ]; then break; fi
+              echo "kv $key 第 $attempt 次写入 HTTP $code，稍后重试..."
+              sleep 5
+            done
+            echo "kv $key <- $src -> HTTP $code"
+            if [ "$code" != "200" ]; then fail=1; fi
+            rm -f /tmp/kv-payload.json
+          done
+          if [ "$fail" != "0" ]; then echo "存在 KV 写入失败，请检查 KV_WRITE_TOKEN / 边缘函数部署"; exit 1; fi

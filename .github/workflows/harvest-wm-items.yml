@@ -1,0 +1,67 @@
+name: 刷新物品总表
+
+# 拉取 WM 全量可交易物品总表，精简为前端所需字段，产出 data/wm-items.json。
+# 脚本：.github/scripts/harvest_wm_items.py（无需额外依赖）。
+# 产物提交到 main 后，首页（main.js）经 jsDelivr 引用：
+#   https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/wm-items.json
+# 前端直接加载，边缘函数（pwm-api.wfspeed.run）不再拉取这份大体积物品表，
+# 只承担登录/订单/在线状态等轻动态操作。物品总表变化低频：每日一次兜底。
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 5 * * *'   # 每天 05:00
+
+concurrency:
+  group: harvest-wm-items
+  cancel-in-progress: true
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: 拉取物品总表
+        run: python3 .github/scripts/harvest_wm_items.py
+        env:
+          WM_ITEMS_OUT: data/wm-items.json
+
+      - name: 提交并推送
+        id: commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/wm-items.json
+          if git diff --staged --quiet; then
+            echo "无变动，跳过提交"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -m "data: refresh wm-items.json [skip ci]"
+          for i in 1 2 3 4 5; do
+            if git push; then
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            cp data/wm-items.json /tmp/wm-items.json
+            git rebase --abort 2>/dev/null || true
+            git fetch origin main
+            git reset --hard origin/main
+            cp /tmp/wm-items.json data/wm-items.json
+            git add data/wm-items.json
+            git commit -m "data: refresh wm-items.json [skip ci]"
+            sleep "$(( (RANDOM % 4) + 2 ))"
+          done
+          exit 1
+
+      # jsDelivr @main 缓存延迟，提交后主动 purge 立即回源最新产物。
+      - name: 刷新 jsDelivr 缓存（物品总表）
+        if: steps.commit.outputs.changed == 'true'
+        run: |
+          curl -s "https://purge.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/wm-items.json" || true

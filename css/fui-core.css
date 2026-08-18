@@ -1,0 +1,345 @@
+/* ═══════════════════════════════════════════════════════════
+   fui-core.css —— Boss Tool 专用 FUI 地基（开机动画 + 五套配色骨架）
+   仅提供：动效 token、开机加载动画、页面进入编排工具类。
+   不含任何业务样式，纯叠加、可安全引入。
+   配色：<html data-fui-theme="..."> 缺省=Orokin金；
+   可选 cyber(赛博) / dark(暗黑) / eyecare(护眼) / minimal(极简)。
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  /* 动效 token —— 全站统一节奏 */
+  --fui-dur-fast:  .16s;
+  --fui-dur:       .3s;
+  --fui-dur-slow:  .6s;
+  --fui-ease-out:    cubic-bezier(.16, 1, .3, 1);
+  --fui-ease-spring: cubic-bezier(.22, .68, 0, 1.2);
+
+  /* 皮肤 1：Orokin 金（默认） */
+  --fui-accent:      #d4a84a;
+  --fui-accent-2:    #f0d878;
+  --fui-accent-glow: rgba(212,168,74,.55);
+  --fui-boot-bg:     #050308;
+  --fui-ring-grad:   conic-gradient(from 0deg, transparent, var(--fui-accent) 90deg, var(--fui-accent-2) 180deg, transparent 300deg);
+
+  --g-primary: 212,168,74;
+  --g-mid:     192,148,58;
+  --g-deep:    185,142,52;
+  --g-hi:      255,215,100;
+}
+
+/* 皮肤 2：赛博朋克霓虹秩序（--g-* 通道变量必须与 main.css 保持一致——本文件加载在
+   main.css 之后，同优先级下这里的旧青色系会盖掉那边的电蓝系重新设计，
+   eyecare/minimal 块也有同款注意事项） */
+html[data-fui-theme="cyber"] {
+  --fui-accent:      #3c78ff;   /* 电蓝：主操作/强调色，对应 main.css 的 --g-primary */
+  --fui-accent-2:    #ff3c6e;   /* 霓虹红：警示/高光，对应 --g-hi */
+  --fui-accent-glow: rgba(60,120,255,.55);
+  --fui-boot-bg:     #0d0221;
+  /* 开机圆环与导航流光同一条色序（蓝→紫→白→红→紫→蓝，即 --cyber-flow-grad），
+     首尾同色让 conic 闭环旋转时无接缝 */
+  --fui-ring-grad:   conic-gradient(from 0deg, #3c78ff, #9633ff, #ffffff, #ff3c6e, #9633ff, #3c78ff);
+
+  --g-primary: 60,120,255;
+  --g-mid:     150,60,255;
+  --g-deep:    40,70,180;
+  --g-hi:      255,60,110;
+}
+
+/* 皮肤 3：暗黑色调 */
+html[data-fui-theme="dark"] {
+  --fui-accent:      #aab2bf;
+  --fui-accent-2:    #dfe4ec;
+  --fui-accent-glow: rgba(170,178,191,.5);
+  --fui-boot-bg:     #060608;
+  --fui-ring-grad:   conic-gradient(from 0deg, transparent, #aab2bf 90deg, #dfe4ec 180deg, transparent 300deg);
+
+  --g-primary: 190,196,206;
+  --g-mid:     150,156,168;
+  --g-deep:    110,116,128;
+  --g-hi:      230,236,244;
+}
+
+/* 皮肤 4：护眼色调（与 main.css 的暖米白纸质配色同步，此文件加载顺序在后，
+   --g-* 这几个通道变量必须跟 main.css 保持一致，否则这里的旧值会覆盖掉那边的重新设计） */
+html[data-fui-theme="eyecare"] {
+  --fui-accent:      #98703a;
+  --fui-accent-2:    #b28848;
+  --fui-accent-glow: rgba(152,112,58,.45);
+  /* 开机动画底色跟随纸质浅色（与 main.css 的 --c-bg 同值），不再是深棕——main.css
+     已为护眼主题定义深色 --fui-label-cn 与浅色 --fui-logo-bg/--fui-vignette，
+     开屏文字、圆环（rgba(var(--g-primary),…) 暖金棕通道）在浅底上对比度直接成立 */
+  --fui-boot-bg:     #f2e9d6;
+  --fui-ring-grad:   conic-gradient(from 0deg, transparent, #98703a 90deg, #b28848 180deg, transparent 300deg);
+
+  --g-primary: 152,112,58;
+  --g-mid:     132,96,50;
+  --g-deep:    108,78,42;
+  --g-hi:      178,136,74;
+}
+
+/* 皮肤 5：极简模式（动效已在 main.css 里全局归零，视觉基调与护眼模式同源的
+   暖米纸质色，这里只给开机动画配色；--g-* 通道变量必须跟 main.css 保持一致，
+   否则这里的旧值会覆盖掉那边的重新设计——同 eyecare 皮肤的注意事项） */
+html[data-fui-theme="minimal"] {
+  --fui-accent:      #98703a;
+  --fui-accent-2:    #b28848;
+  --fui-accent-glow: rgba(152,112,58,.4);
+  /* 开机动画底色同为浅米（与 main.css 的 --c-bg 同值），理由同 eyecare 皮肤 */
+  --fui-boot-bg:     #f2e9d6;
+  --fui-ring-grad:   conic-gradient(from 0deg, transparent, #98703a 90deg, #b28848 180deg, transparent 300deg);
+
+  --g-primary: 152,112,58;
+  --g-mid:     132,96,50;
+  --g-deep:    108,78,42;
+  --g-hi:      178,136,74;
+}
+
+/* ─── 全站战术接入界面（精美载入动画，风格同世界状态） ─── */
+#fui-splash {
+  position: fixed; inset: 0; z-index: 99999;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: var(--fui-boot-bg); overflow: hidden;
+  transition: opacity .8s cubic-bezier(.4,0,.2,1), visibility .8s;
+}
+#fui-splash.fui-splash--done { opacity: 0; visibility: hidden; pointer-events: none; }
+#fui-splash::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(var(--g-primary),.038) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--g-primary),.038) 1px, transparent 1px);
+  background-size: 54px 54px;
+}
+#fui-splash::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 72% 72% at 50% 50%, transparent 32%, var(--fui-vignette, rgba(4,2,1,.82)) 100%);
+}
+.fui-spl-scan {
+  position: absolute; top: 0; left: 0; right: 0; height: 2px; z-index: 1;
+  background: linear-gradient(90deg,
+    transparent 0%, rgba(var(--g-primary),0) 7%,
+    rgba(var(--g-primary),.96) 50%,
+    rgba(var(--g-primary),0) 93%, transparent 100%);
+  box-shadow: 0 0 18px 7px rgba(var(--g-primary),.32), 0 0 44px 18px rgba(var(--g-primary),.1);
+  animation: fuiSplScan 2.7s cubic-bezier(.37,0,.63,1) infinite;
+}
+@keyframes fuiSplScan {
+  0%   { transform: translateY(0); opacity: 0; }
+  4%   { opacity: 1; }
+  88%  { opacity: .75; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+.fui-spl-corner {
+  position: absolute; width: 52px; height: 52px; z-index: 3; opacity: 0;
+}
+.fui-spl-corner--tl { top:2.2rem;left:2.2rem; border-top:1.5px solid rgb(var(--g-primary)); border-left:1.5px solid rgb(var(--g-primary)); animation:fuiSplBrTL .55s .06s cubic-bezier(.22,1,.36,1) forwards; }
+.fui-spl-corner--tr { top:2.2rem;right:2.2rem; border-top:1.5px solid rgb(var(--g-primary)); border-right:1.5px solid rgb(var(--g-primary)); animation:fuiSplBrTR .55s .10s cubic-bezier(.22,1,.36,1) forwards; }
+.fui-spl-corner--bl { bottom:2.2rem;left:2.2rem; border-bottom:1.5px solid rgb(var(--g-primary)); border-left:1.5px solid rgb(var(--g-primary)); animation:fuiSplBrBL .55s .14s cubic-bezier(.22,1,.36,1) forwards; }
+.fui-spl-corner--br { bottom:2.2rem;right:2.2rem; border-bottom:1.5px solid rgb(var(--g-primary)); border-right:1.5px solid rgb(var(--g-primary)); animation:fuiSplBrBR .55s .18s cubic-bezier(.22,1,.36,1) forwards; }
+@keyframes fuiSplBrTL { from{opacity:0;transform:translate(-10px,-10px)} to{opacity:1;transform:translate(0,0)} }
+@keyframes fuiSplBrTR { from{opacity:0;transform:translate(10px,-10px)} to{opacity:1;transform:translate(0,0)} }
+@keyframes fuiSplBrBL { from{opacity:0;transform:translate(-10px,10px)} to{opacity:1;transform:translate(0,0)} }
+@keyframes fuiSplBrBR { from{opacity:0;transform:translate(10px,10px)} to{opacity:1;transform:translate(0,0)} }
+/* 开机界面所有英文/数字文字统一用 var(--f-main)：原来写的 Orbitron/Rajdhani 全站
+   从未加载过（仓库里没有任何 @font-face 或字体引入），实际渲染本就落到 fallback，
+   此处对齐现实——顺便让开机文字跟随用户自己的字体设置，各主题下观感一致 */
+.fui-spl-side {
+  position: absolute; top:0; bottom:0; width:148px; padding:0 1rem;
+  display:flex; align-items:center;
+  font-family:var(--f-main); font-size:.66rem; line-height:2.1;
+  letter-spacing:.05em; color:rgba(var(--g-primary),.2);
+  overflow:hidden; user-select:none; z-index:1;
+  opacity:0; animation:fuiSplFI .5s .85s ease forwards;
+}
+@keyframes fuiSplFI { to { opacity: 1; } }
+.fui-spl-side--l { left:0; text-align:left; }
+.fui-spl-side--r { right:0; text-align:right; }
+.fui-spl-side::before { content:''; position:absolute; top:0; left:0; right:0; height:28%; background:linear-gradient(180deg,var(--fui-boot-bg),transparent); z-index:1; pointer-events:none; }
+.fui-spl-side::after  { content:''; position:absolute; bottom:0; left:0; right:0; height:28%; background:linear-gradient(0deg,var(--fui-boot-bg),transparent); z-index:1; pointer-events:none; }
+.fui-spl-center {
+  position:relative; z-index:5;
+  display:flex; flex-direction:column; align-items:center;
+  transform:scale(1.15); transform-origin:center center;
+}
+.fui-spl-hex-area {
+  position:relative; width:186px; height:186px;
+  display:flex; align-items:center; justify-content:center;
+  margin-bottom:1.8rem; flex-shrink:0;
+}
+.fui-spl-hex-wrap {
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+}
+.fui-spl-hex-wrap.fui-spl-spinning { animation:fuiSplHexSpin 24s linear infinite; }
+@keyframes fuiSplHexSpin { to { transform: rotate(360deg); } }
+.fui-spl-ring-svg { width:100%; height:100%; overflow:visible; }
+.fui-spl-ring-o {
+  fill:none; stroke:rgba(var(--g-primary),.88); stroke-width:1.5;
+  stroke-dasharray:553; stroke-dashoffset:553;
+  filter:drop-shadow(0 0 6px rgba(var(--g-primary),.55));
+  animation:fuiSplDash553 1s .1s cubic-bezier(.4,0,.2,1) forwards;
+}
+.fui-spl-ring-i {
+  fill:rgba(var(--g-primary),.025); stroke:rgba(var(--g-primary),.24); stroke-width:1;
+  stroke-dasharray:477; stroke-dashoffset:477;
+  animation:fuiSplDash477 .95s .28s cubic-bezier(.4,0,.2,1) forwards;
+}
+.fui-spl-ring-tk { stroke:rgba(var(--g-primary),.55); stroke-width:1.5; stroke-linecap:round; opacity:0; animation:fuiSplFI .3s 1.0s ease forwards; }
+@keyframes fuiSplDash553 { to { stroke-dashoffset: 0; } }
+@keyframes fuiSplDash477 { to { stroke-dashoffset: 0; } }
+.fui-spl-logo-cnt {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  z-index:2; width:128px; height:128px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; animation:fuiSplFI .65s .9s ease forwards;
+}
+.fui-spl-logo-bg {
+  position:absolute; inset:0; border-radius:50%;
+  background:var(--fui-logo-bg, radial-gradient(circle at 50% 55%,rgba(22,16,9,.82) 0%,rgba(10,7,3,.96) 55%,rgba(5,3,1,.99) 100%));
+  border:1.5px solid rgba(var(--g-primary),.42);
+  box-shadow:inset 0 0 28px rgba(var(--g-primary),.1),inset 0 -8px 24px rgba(var(--g-primary),.06),0 0 24px rgba(var(--g-primary),.18),0 0 60px rgba(var(--g-primary),.07);
+}
+.fui-spl-logo-img { position:relative; z-index:1; width:78%; height:78%; object-fit:contain; filter:drop-shadow(0 0 10px rgba(var(--g-primary),.5)) drop-shadow(0 2px 8px rgba(0,0,0,.6)); }
+.fui-spl-label-cn {
+  font-size:1.55rem; font-weight:700; letter-spacing:.26em;
+  color:var(--fui-label-cn, rgba(230,210,168,.92)); text-shadow:0 0 20px rgba(var(--g-primary),.22);
+  opacity:0; transform:translateY(14px);
+  animation:fuiSplUp .55s 1.0s cubic-bezier(.22,1,.36,1) forwards;
+  margin-bottom:.35rem;
+}
+.fui-spl-label-en {
+  font-family:var(--f-main); font-size:.66rem; font-weight:700;
+  letter-spacing:.32em; color:rgba(var(--g-primary),.48);
+  opacity:0; transform:translateY(10px);
+  animation:fuiSplUp .55s 1.1s cubic-bezier(.22,1,.36,1) forwards;
+  margin-bottom:1.55rem;
+}
+.fui-spl-dot { color:rgba(var(--g-primary),.8); margin:0 .18em; }
+@keyframes fuiSplUp { to { opacity:1; transform:translateY(0); } }
+.fui-spl-sr {
+  display:flex; align-items:center; gap:.65rem;
+  opacity:0; margin-bottom:.9rem;
+  animation:fuiSplFI .4s 1.24s ease forwards;
+}
+.fui-spl-sr-dot {
+  width:6px; height:6px; border-radius:50%; flex-shrink:0;
+  background:rgb(var(--g-primary)); box-shadow:0 0 7px rgba(var(--g-primary),.9);
+  animation:fuiSplDotBlink .65s 1.24s ease-in-out infinite alternate;
+}
+@keyframes fuiSplDotBlink {
+  from { opacity:.32; box-shadow:0 0 3px rgba(var(--g-primary),.35); }
+  to   { opacity:1;   box-shadow:0 0 10px rgba(var(--g-primary),1); }
+}
+.fui-spl-sr-txt { font-family:var(--f-main); font-size:.82rem; font-weight:600; letter-spacing:.18em; color:rgba(var(--g-primary),.72); }
+.fui-spl-bar { display:flex; align-items:center; gap:.75rem; opacity:0; margin-bottom:.88rem; animation:fuiSplFI .4s 1.37s ease forwards; }
+.fui-spl-bar-track { width:244px; height:2px; background:rgba(var(--g-primary),.1); position:relative; }
+.fui-spl-bar-fill { height:100%; width:0%; background:linear-gradient(90deg,rgba(var(--g-primary),.44),rgba(var(--g-hi),.95)); transition:width .24s ease; position:relative; }
+.fui-spl-bar-fill::after { content:''; position:absolute; left:100%; top:-3px; width:2px; height:8px; margin-left:-1px; background:rgb(var(--g-hi)); box-shadow:0 0 8px 3px rgba(var(--g-primary),.92); }
+.fui-spl-bar-pct { font-family:var(--f-main); font-size:.68rem; font-weight:700; color:rgba(var(--g-primary),.58); letter-spacing:.06em; min-width:2.4rem; text-align:right; }
+.fui-spl-info { font-family:var(--f-main); font-size:.72rem; letter-spacing:.1em; color:rgba(var(--g-primary),.33); opacity:0; animation:fuiSplFI .4s 1.54s ease forwards; min-height:1.1em; }
+.fui-spl-footer {
+  position:absolute; bottom:1.4rem; left:0; right:0;
+  display:flex; justify-content:space-between; padding:0 2.8rem;
+  font-family:var(--f-main); font-size:.68rem; letter-spacing:.14em;
+  color:rgba(var(--g-primary),.28); z-index:4;
+  opacity:0; animation:fuiSplFI .5s 1.06s ease forwards;
+}
+@media (max-width: 640px) {
+  .fui-spl-side { display: none; }
+  .fui-spl-hex-area { width:148px; height:148px; margin-bottom:1.35rem; }
+  .fui-spl-logo-cnt { width:102px; height:102px; }
+  .fui-spl-bar-track { width:176px; }
+  .fui-spl-label-cn { font-size:1.25rem; }
+  .fui-spl-corner { width:38px; height:38px; }
+  .fui-spl-corner--tl, .fui-spl-corner--tr { top:1.2rem; }
+  .fui-spl-corner--bl, .fui-spl-corner--br { bottom:1.2rem; }
+  .fui-spl-corner--tl, .fui-spl-corner--bl { left:1.2rem; }
+  .fui-spl-corner--tr, .fui-spl-corner--br { right:1.2rem; }
+}
+
+@keyframes fuiFadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── 页面进入编排：内容元素错峰淡入 ─── */
+[data-fui-reveal] > * {
+  opacity: 0; transform: translateY(16px);
+}
+body.fui-in [data-fui-reveal] > * {
+  animation: fuiFadeUp .55s var(--fui-ease-spring) forwards;
+}
+body.fui-in [data-fui-reveal] > *:nth-child(1) { animation-delay: .04s; }
+body.fui-in [data-fui-reveal] > *:nth-child(2) { animation-delay: .10s; }
+body.fui-in [data-fui-reveal] > *:nth-child(3) { animation-delay: .16s; }
+body.fui-in [data-fui-reveal] > *:nth-child(4) { animation-delay: .22s; }
+body.fui-in [data-fui-reveal] > *:nth-child(5) { animation-delay: .28s; }
+body.fui-in [data-fui-reveal] > *:nth-child(n+6) { animation-delay: .34s; }
+
+/* ─── 备案区视觉设置面板：中文字体 / 英文字体 / 配色主题（三组独立下拉） ─── */
+.bw-fui-settings-row {
+  margin-top: 1rem;
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
+  gap: .55rem .9rem;
+}
+.bw-fui-select-wrap {
+  display: inline-flex; align-items: center; gap: .4rem;
+}
+.bw-fui-select-label {
+  font-size: .68rem; letter-spacing: .05em; white-space: nowrap;
+  color: rgba(var(--g-primary, 212,168,74), .55);
+}
+.bw-fui-select {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  padding: .34rem .8rem;
+  background: rgba(var(--g-primary, 212,168,74), .06);
+  border: 1px solid var(--fui-accent);
+  border-radius: 999px;
+  color: var(--fui-accent-2);
+  font-family: inherit; font-size: .72rem; font-weight: 700;
+  letter-spacing: .03em; cursor: pointer;
+  text-align: center; text-align-last: center;
+  transition: background var(--fui-dur) var(--fui-ease-out),
+              box-shadow var(--fui-dur) var(--fui-ease-out);
+}
+.bw-fui-select:hover, .bw-fui-select:focus {
+  background: rgba(var(--g-primary, 212,168,74), .14);
+  box-shadow: 0 0 14px var(--fui-accent-glow);
+  outline: none;
+}
+/* option 弹出层底色/文字色走 main.css 的浮起表面与正文变量（eyecare/minimal 会
+   覆盖成浅米底深字），变量缺失时兜底回旧的深蓝底浅米字，保证老页面不失衡 */
+.bw-fui-select option { background: var(--c-float-bg, #14121a); color: var(--c-text, #e8e0cc); }
+/* 赛博皮肤下设置面板下拉：边框流光直接复用 main.css 的 --cyber-flow-grad 一条渐变
+   （与导航流光同一色序），不再另写一份霓虹配色，后续调色只需改 main.css 一处 */
+html[data-fui-theme="cyber"] .bw-fui-select {
+  border-color: transparent;
+  background:
+    linear-gradient(rgba(13,2,33,.9), rgba(13,2,33,.9)) padding-box,
+    var(--cyber-flow-grad) border-box;
+  background-size: auto, var(--cyber-flow-size);
+  animation: fuiToggleFlow 3s linear infinite;
+}
+@keyframes fuiToggleFlow { to { background-position: 0 0, 300% 0; } }
+
+/* 赛博皮肤下"订单筛选/显示设置/快捷操作"分组标签：不用金皮那套双色暖金流光，
+   直接复用 main.css 的 --cyber-flow-grad（与导航、设置面板下拉边框同一条渐变），
+   全站赛博流光只此一份配色；辉光阴影同步为电蓝/霓虹红，不再是旧的青/品红残留。 */
+html[data-fui-theme="cyber"] .bw-tb-group-label {
+  background-image: var(--cyber-flow-grad);
+  background-size: var(--cyber-flow-size);
+  text-shadow: 0 0 10px rgba(60,120,255,.4), 0 0 16px rgba(255,60,110,.25);
+  animation: bwTbLabelFlowCyber 3.4s linear infinite;
+}
+@keyframes bwTbLabelFlowCyber { to { background-position: -300% center; } }
+@media (prefers-reduced-motion: reduce) { html[data-fui-theme="cyber"] .bw-tb-group-label { animation: none; } }
+@media (max-width: 480px) {
+  .bw-fui-settings-row { flex-direction: column; gap: .5rem; }
+}
+
+/* ─── 无障碍：尊重 reduced-motion ─── */
+@media (prefers-reduced-motion: reduce) {
+  .fui-spl-scan, .fui-spl-ring-o, .fui-spl-ring-i, .fui-spl-ring-tk, .fui-spl-sr-dot,
+  .fui-spl-hex-wrap.fui-spl-spinning { animation: none !important; }
+  [data-fui-reveal] > * { opacity: 1 !important; transform: none !important; animation: none !important; }
+}
