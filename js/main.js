@@ -146,7 +146,7 @@ async function loadOrders() {
       mod_rank:    o.rank !== undefined ? o.rank : (o.mod_rank !== undefined ? o.mod_rank : (o.modRank !== undefined ? o.modRank : undefined)),
       quantity_in_set: o.perTrade || o.quantity_in_set || o.quantityInSet || undefined,
       _slug:  slug,
-      _name:  itemObj?.zh || itemObj?.en || o.item?.en || o.item?.en_name || o.item?.name || slug,
+      _name:  itemObj?.en || o.item?.en || o.item?.en_name || o.item?.name || slug,
       _zh:    itemObj?.zh || o.item?.zh || '',
       _tags:  itemObj?.tags || [],
       thumb:     o.thumb     || itemObj?.thumb     || null,
