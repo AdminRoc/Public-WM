@@ -1353,12 +1353,12 @@ html[data-fui-theme="minimal"] .bw-notice-close:hover {
 /* 搜索框 */
 .bw-search-wrap { position: relative; }
 .bw-search-input {
-  width: 160px; padding: .3rem .7rem;
+  width: 140px; padding: .3rem .7rem;
   background: var(--c-input-bg); border: 1px solid rgba(var(--g-deep),.32);
   border-radius: var(--r-sm); color: var(--c-input-text); font-size: .88rem;
   outline: none; transition: border-color var(--ease-fast), width .2s ease;
 }
-.bw-search-input:focus { border-color: var(--c-gold-mid); width: 200px; }
+.bw-search-input:focus { border-color: var(--c-gold-mid); width: 180px; }
 .bw-search-input::placeholder { color: var(--c-input-placeholder); }
 
 /* 均价倍率 */
