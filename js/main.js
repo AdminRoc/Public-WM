@@ -1266,25 +1266,46 @@ function bindEvents() {
       topBtn.classList.toggle('is-disabled', y < 40);
       botBtn.classList.toggle('is-disabled', maxY - y < 40);
     }
-    topBtn.addEventListener('click', function() { window.scrollTo({ top: 0, behavior: 'smooth' }); });
+    topBtn.addEventListener('click', function() {
+      /* 回顶部时恢复轻量渲染，避免大量 DOM 节点残留导致卡顿 */
+      if (_visibleCount > LIST_BATCH) { _visibleCount = LIST_BATCH; render(); }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
     botBtn.addEventListener('click', function() {
-      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+      /* 如果还有未渲染的订单，一次性全部加载再滚到底部，避免逐批追加需要反复点击 */
+      if (_visibleCount < _orders.length) {
+        _visibleCount = _orders.length;
+        render();
+      }
+      requestAnimationFrame(function() {
+        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+      });
     });
     window.addEventListener('scroll', syncState, { passive: true });
     window.addEventListener('resize', syncState);
     syncState();
   })();
 
-  /* 滚动增量渲染：滚近底部追加下一批订单（rAF 节流） */
+  /* 滚动增量渲染：滚近底部追加，滚回上方回收（rAF 节流） */
   let _incRaf = false;
   window.addEventListener('scroll', function() {
-    if (_incRaf || _visibleCount >= _orders.length) return;
+    if (_incRaf) return;
     _incRaf = true;
     requestAnimationFrame(function() {
       _incRaf = false;
       const d = document.documentElement;
-      if (window.scrollY + window.innerHeight >= d.scrollHeight - 800) {
+      const y = window.scrollY;
+      const h = window.innerHeight;
+      const scrollH = d.scrollHeight;
+      /* 向下：滚近底部时追加一批 */
+      if (y + h >= scrollH - 800 && _visibleCount < _orders.length) {
         _visibleCount = Math.min(_orders.length, _visibleCount + LIST_BATCH);
+        render();
+        return;
+      }
+      /* 向上：滚到页面上方 25% 且有多余渲染时，逐步回收底部订单 */
+      if (_visibleCount > LIST_BATCH && y < scrollH * 0.25) {
+        _visibleCount = Math.max(LIST_BATCH, _visibleCount - LIST_BATCH);
         render();
       }
     });
