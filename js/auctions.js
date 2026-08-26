@@ -672,24 +672,35 @@ async function doSearch() {
   document.querySelectorAll('.bw-auc-online-pill').forEach(function(b) {
     b.classList.toggle('active', b.dataset.ostatus === 'all');
   });
-  setStatus('搜索中…');
-  try {
-    const j = await apiFetch('/auctions/search?' + buildQuery());
-    const auctions = (j.payload && j.payload.auctions) || [];
-    var list = auctions.filter(function(a) { return !a.closed && a.visible !== false; });
-    // 二次精确过滤（客户端，不进 API；单次渲染前完成，防未筛闪现）
-    if (_aType === 'riven') list = list.filter(_rivenPasses);
-    else list = list.filter(_lichPasses);
-    _lastResultList = list;
-    renderResults(sortResults(filterByOnline(list)), 'bw-auc-result-list', 'bw-auc-result-n');
-    renderRivenAvgBadge(_aType === 'riven' ? list : null);
-    setStatus('');
-  } catch (e) {
-    /* WM 搜索接口透传的错误信封是 raw JSON，过翻译函数再展示 */
-    setStatus('搜索失败：' + window.bwWmErrorText(e));
-  } finally {
-    btn.disabled = false;
+  setStatus('搜索中...');
+  var _lastErr = null;
+  var _success = false;
+  for (var _attempt = 0; _attempt < 6; _attempt++) {
+    try {
+      if (_attempt > 0) setStatus('搜索中... (重试 ' + _attempt + '/5)');
+      const j = await apiFetch('/auctions/search?' + buildQuery());
+      const auctions = (j.payload && j.payload.auctions) || [];
+      var list = auctions.filter(function(a) { return !a.closed && a.visible !== false; });
+      if (_aType === 'riven') list = list.filter(_rivenPasses);
+      else list = list.filter(_lichPasses);
+      _lastResultList = list;
+      renderResults(sortResults(filterByOnline(list)), 'bw-auc-result-list', 'bw-auc-result-n');
+      renderRivenAvgBadge(_aType === 'riven' ? list : null);
+      setStatus('');
+      _success = true;
+      break;
+    } catch (e) {
+      _lastErr = e;
+      var _msg = (e && e.message) || '';
+      var _isTransient = /429|502|503|504|500|network|timeout|failed to fetch|Load failed|ETIMEDOUT|ECONNRESET|Internal Server Error/i.test(_msg) || (e && e.status >= 500);
+      if (!_isTransient || _attempt >= 5) break;
+      await new Promise(function(r){ setTimeout(r, 900 * (_attempt + 1) + Math.random()*400); });
+    }
   }
+  if (!_success) {
+    setStatus('搜索超时，可能需要重新刷新页面后再试。' + (_lastErr ? window.bwWmErrorText(_lastErr) : ''));
+  }
+  btn.disabled = false;
 }
 
 /* ── WTB 求购语句（永远英文） ── */
