@@ -4,6 +4,11 @@
    ═══════════════════════════════════════════════════════════ */
 
 let _aType = 'riven';
+/* 裂罅二次精确筛选的特殊 token（不进 API，仅客户端过滤） */
+const RIVEN_POS_NONE = '__POS_NONE__';   // 正词条③ 不存在（仅2正）
+const RIVEN_POS_ANY  = '__POS_ANY__';    // 正词条③ 存在（任意第三正）
+const RIVEN_NEG_NONE = '__NEG_NONE__';   // 无负词条
+const RIVEN_NEG_ANY  = '__NEG_ANY__';    // 任意负词条
 let _aLang = 'zh';
 let _mode  = 'search'; // 'search' | 'manage'
 const _dicts   = {};
@@ -433,6 +438,7 @@ function renderFilters() {
   } else {
     html += selFieldHtml('bw-auc-element', '元素',
       [{ value: '', label: '（不限）' }].concat(ELEMENTS.map(function(e) { return { value: e.slug, label: L(e) }; })));
+    html += '<div class="bw-auc-field"><label>伤害% (1-60)</label><div style="display:flex;gap:.4rem"><input class="bw-ac-input" id="bw-auc-dmg-min" type="number" min="1" max="60" placeholder="最小值"><input class="bw-ac-input" id="bw-auc-dmg-max" type="number" min="1" max="60" placeholder="最大值"></div></div>';
     html += selFieldHtml('bw-auc-ephemera', '幻纹',
       [{ value: '', label: '（不限）' }, { value: 'true', label: '有' }, { value: 'false', label: '无' }]);
   }
@@ -450,8 +456,28 @@ function renderFilters() {
   if (_aType === 'riven') {
     initAc('bw-auc-pos1', aArr, true);
     initAc('bw-auc-pos2', aArr, true);
-    initAc('bw-auc-pos3', aArr, true);
-    initAc('bw-auc-neg',  aArr, true);
+    (function(){
+      var _basePos3 = aArr;
+      var _pos3Arr = function(){
+        var base = _basePos3();
+        return [
+          { slug: RIVEN_POS_NONE, i18n: {'zh-hans':{name:'不存在（仅2正词条）'},en:{name:'No 3rd Positive'}}, zh:'不存在', en:'No 3rd Positive' },
+          { slug: RIVEN_POS_ANY,  i18n: {'zh-hans':{name:'存在（任意第三正）'},en:{name:'Any 3rd Positive'}},  zh:'存在',  en:'Any 3rd Positive' }
+        ].concat(base);
+      };
+      initAc('bw-auc-pos3', _pos3Arr, true);
+    })();
+    (function(){
+      var _baseNeg = aArr;
+      var _negArr = function(){
+        var base = _baseNeg();
+        return [
+          { slug: RIVEN_NEG_NONE, i18n: {'zh-hans':{name:'不存在（无负词条）'},en:{name:'No Negative'}}, zh:'不存在', en:'No Negative' },
+          { slug: RIVEN_NEG_ANY,  i18n: {'zh-hans':{name:'存在（任意负词条）'},en:{name:'Any Negative'}},  zh:'存在',  en:'Any Negative' }
+        ].concat(base);
+      };
+      initAc('bw-auc-neg', _negArr, true);
+    })();
     initSel('bw-auc-polarity');
   } else {
     initSel('bw-auc-element');
@@ -495,6 +521,9 @@ function selVal(id) {
   return el ? el.value : '';
 }
 
+function _isRealRivenAttr(slug){
+  return !!slug && slug!==RIVEN_POS_NONE && slug!==RIVEN_POS_ANY && slug!==RIVEN_NEG_NONE && slug!==RIVEN_NEG_ANY;
+}
 function buildQuery() {
   const p = new URLSearchParams();
   p.set('type', _aType);
@@ -504,10 +533,12 @@ function buildQuery() {
   if (buyout) p.set('buyout_policy', buyout);
   p.set('sort_by', selVal('bw-auc-sort') || 'price_asc');
   if (_aType === 'riven') {
-    const pos = [acVal('bw-auc-pos1'), acVal('bw-auc-pos2'), acVal('bw-auc-pos3')].filter(Boolean);
+    const p1 = acVal('bw-auc-pos1'), p2 = acVal('bw-auc-pos2'), p3 = acVal('bw-auc-pos3');
+    const pos = [p1,p2].filter(Boolean);
+    if (_isRealRivenAttr(p3)) pos.push(p3);
     if (pos.length) p.set('positive_stats', pos.join(','));
     const neg = acVal('bw-auc-neg');
-    if (neg) p.set('negative_stats', neg);
+    if (_isRealRivenAttr(neg)) p.set('negative_stats', neg);
     const pol = selVal('bw-auc-polarity');
     if (pol) p.set('polarity', pol);
   } else {
@@ -515,9 +546,61 @@ function buildQuery() {
     if (el) p.set('element', el);
     const eph = selVal('bw-auc-ephemera');
     if (eph) p.set('having_ephemera', eph);
+    var dminEl = document.getElementById('bw-auc-dmg-min');
+    var dmaxEl = document.getElementById('bw-auc-dmg-max');
+    var dmin = dminEl ? parseInt(dminEl.value,10) : NaN;
+    var dmax = dmaxEl ? parseInt(dmaxEl.value,10) : NaN;
+    if (!isNaN(dmin) && dmin>=1 && dmin<=60) p.set('damage_min', String(dmin));
+    if (!isNaN(dmax) && dmax>=1 && dmax<=60) p.set('damage_max', String(dmax));
   }
   return p.toString();
 }
+
+/* 裂罅/赤毒二次精确过滤（不进 API，仅客户端） */
+function _rivenPasses(a){
+  var p3 = acVal('bw-auc-pos3'), neg = acVal('bw-auc-neg');
+  var needPos = null, needNeg = null;
+  if (p3 === RIVEN_POS_NONE) needPos = 2;
+  else if (_isRealRivenAttr(p3)) needPos = 3;
+  else if (p3 === RIVEN_POS_ANY) needPos = 3;
+  if (neg === RIVEN_NEG_NONE) needNeg = 0;
+  else if (neg === RIVEN_NEG_ANY) needNeg = 1;
+  else if (_isRealRivenAttr(neg)) needNeg = 1;
+  var attrs = (a.item && a.item.attributes) || [];
+  var pc = 0, nc = 0;
+  for (var i=0;i<attrs.length;i++) attrs[i].positive ? pc++ : nc++;
+  if (needPos !== null && pc !== needPos) return false;
+  if (needNeg !== null && nc !== needNeg) return false;
+  if (_isRealRivenAttr(p3)){
+    var havePos = {};
+    for (var i=0;i<attrs.length;i++) if(attrs[i].positive) havePos[attrs[i].url_name]=1;
+    if (!havePos[p3]) return false;
+  }
+  if (_isRealRivenAttr(neg)){
+    var haveNeg = {};
+    for (var i=0;i<attrs.length;i++) if(!attrs[i].positive) haveNeg[attrs[i].url_name]=1;
+    if (!haveNeg[neg]) return false;
+  }
+  return true;
+}
+function _lichPasses(a){
+  var elSel = selVal('bw-auc-element');
+  if (elSel && a.item && a.item.element !== elSel) return false;
+  var ephSel = selVal('bw-auc-ephemera');
+  if (ephSel){
+    var want = ephSel === 'true';
+    if (!a.item || !!a.item.having_ephemera !== want) return false;
+  }
+  var dminEl = document.getElementById('bw-auc-dmg-min');
+  var dmaxEl = document.getElementById('bw-auc-dmg-max');
+  var dmin = dminEl ? parseInt(dminEl.value,10) : NaN;
+  var dmax = dmaxEl ? parseInt(dmaxEl.value,10) : NaN;
+  var dmg = a.item ? a.item.damage : null;
+  if (!isNaN(dmin) && dmin>=1 && dmin<=60 && dmg!=null && dmg < dmin) return false;
+  if (!isNaN(dmax) && dmax>=1 && dmax<=60 && dmg!=null && dmg > dmax) return false;
+  return true;
+}
+
 
 /* ── 结果排序 ── */
 function auctionPrice(a) { return a.buyout_price != null ? a.buyout_price : (a.starting_price || 0); }
@@ -599,7 +682,10 @@ async function doSearch() {
   try {
     const j = await apiFetch('/auctions/search?' + buildQuery());
     const auctions = (j.payload && j.payload.auctions) || [];
-    const list = auctions.filter(function(a) { return !a.closed && a.visible !== false; });
+    var list = auctions.filter(function(a) { return !a.closed && a.visible !== false; });
+    // 二次精确过滤（客户端，不进 API；单次渲染前完成，防未筛闪现）
+    if (_aType === 'riven') list = list.filter(_rivenPasses);
+    else list = list.filter(_lichPasses);
     _lastResultList = list;
     renderResults(sortResults(filterByOnline(list)), 'bw-auc-result-list', 'bw-auc-result-n');
     renderRivenAvgBadge(_aType === 'riven' ? list : null);
