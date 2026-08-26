@@ -438,7 +438,7 @@ function renderFilters() {
   } else {
     html += selFieldHtml('bw-auc-element', '元素',
       [{ value: '', label: '（不限）' }].concat(ELEMENTS.map(function(e) { return { value: e.slug, label: L(e) }; })));
-    html += '<div class="bw-auc-field"><label>伤害% (1-60)</label><div style="display:flex;gap:.4rem"><input class="bw-ac-input" id="bw-auc-dmg-min" type="number" min="1" max="60" placeholder="最小值"><input class="bw-ac-input" id="bw-auc-dmg-max" type="number" min="1" max="60" placeholder="最大值"></div></div>';
+    html += '<div class="bw-auc-field"><label>伤害% (25-60)</label><div style="display:flex;gap:.4rem"><input class="bw-ac-input" id="bw-auc-dmg-min" type="number" min="25" max="60" placeholder="25"><input class="bw-ac-input" id="bw-auc-dmg-max" type="number" min="25" max="60" placeholder="60"></div></div>';
     html += selFieldHtml('bw-auc-ephemera', '幻纹',
       [{ value: '', label: '（不限）' }, { value: 'true', label: '有' }, { value: 'false', label: '无' }]);
   }
@@ -546,12 +546,7 @@ function buildQuery() {
     if (el) p.set('element', el);
     const eph = selVal('bw-auc-ephemera');
     if (eph) p.set('having_ephemera', eph);
-    var dminEl = document.getElementById('bw-auc-dmg-min');
-    var dmaxEl = document.getElementById('bw-auc-dmg-max');
-    var dmin = dminEl ? parseInt(dminEl.value,10) : NaN;
-    var dmax = dmaxEl ? parseInt(dmaxEl.value,10) : NaN;
-    if (!isNaN(dmin) && dmin>=1 && dmin<=60) p.set('damage_min', String(dmin));
-    if (!isNaN(dmax) && dmax>=1 && dmax<=60) p.set('damage_max', String(dmax));
+    // 伤害% 1-60 仅客户端二次筛选，不进 API（25-60 大区间直发易 500，且单 damage 参被忽略）
   }
   return p.toString();
 }
@@ -596,8 +591,8 @@ function _lichPasses(a){
   var dmin = dminEl ? parseInt(dminEl.value,10) : NaN;
   var dmax = dmaxEl ? parseInt(dmaxEl.value,10) : NaN;
   var dmg = a.item ? a.item.damage : null;
-  if (!isNaN(dmin) && dmin>=1 && dmin<=60 && dmg!=null && dmg < dmin) return false;
-  if (!isNaN(dmax) && dmax>=1 && dmax<=60 && dmg!=null && dmg > dmax) return false;
+  if (!isNaN(dmin) && dmin>=25 && dmin<=60 && dmg!=null && dmg < dmin) return false;
+  if (!isNaN(dmax) && dmax>=25 && dmax<=60 && dmg!=null && dmg > dmax) return false;
   return true;
 }
 
