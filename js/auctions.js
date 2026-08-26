@@ -447,10 +447,6 @@ function renderFilters() {
     [{ value: '', label: '全部' }, { value: 'direct', label: '一口价' }, { value: 'auction', label: '拍卖' }]);
   html += selFieldHtml('bw-auc-sort', '排序',
     [{ value: 'price_asc', label: '价格升序' }, { value: 'price_desc', label: '价格降序' }]);
-  if (_aType !== 'riven') {
-    html += '<div class="bw-auc-field"><label>名称搜索</label><input class="bw-ac-input" id="bw-auc-name" placeholder="模糊搜索..." autocomplete="off" spellcheck="false"></div>';
-  }
-
   box.innerHTML = html;
 
   var wArr = function() { return _dictArr[weaponDict] || []; };
@@ -596,16 +592,6 @@ function _lichPasses(a){
   var dmg = a.item ? a.item.damage : null;
   if (!isNaN(dmin) && dmin>=25 && dmin<=60 && dmg!=null && dmg < dmin) return false;
   if (!isNaN(dmax) && dmax>=25 && dmax<=60 && dmg!=null && dmg > dmax) return false;
-  var nameEl = document.getElementById('bw-auc-name');
-  var q = nameEl ? nameEl.value.trim().toLowerCase() : '';
-  if (q){
-    var item = a.item || {};
-    var wname = (item.weapon_url_name || '').toLowerCase();
-    // also check display name via weapon dict if available
-    var disp = '';
-    try { var wobj = (_dictArr[_aType + '/weapons'] || []).find(function(w){return w.slug===wname;}); if(wobj) disp = ((wobj.i18n&&wobj.i18n['zh-hans']&&wobj.i18n['zh-hans'].name)||wobj.slug||'').toLowerCase(); } catch(e){}
-    if (wname.indexOf(q)===-1 && disp.indexOf(q)===-1 && (item.name||'').toLowerCase().indexOf(q)===-1) return false;
-  }
   return true;
 }
 
