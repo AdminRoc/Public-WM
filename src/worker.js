@@ -938,9 +938,27 @@ async function handleAuctionCreate(request) {
   }
 }
 
+async function handlePublicUserStatus(request) {
+  const url = new URL(request.url);
+  const names = (url.searchParams.get('users') || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean).slice(0, 100);
+  const out = {};
+  await Promise.all(names.map(async function (name) {
+    try {
+      const resp = await wmPublicFetch('/v1/profile/' + encodeURIComponent(name));
+      if (!resp.ok) { out[name] = 'offline'; return; }
+      const json = await resp.json();
+      const profile = (json.payload && json.payload.profile) || json.data || {};
+      out[name] = profile.status || 'offline';
+    } catch (e) { out[name] = 'offline'; }
+  }));
+  return jsonResponse({ users: out });
+}
+
 async function handleFetch(request, env) {
     const url = new URL(request.url);
     const p   = url.pathname;
+
+    if (p === '/api/wm/user-status' && request.method === 'GET') return handlePublicUserStatus(request);
 
     /* 拍卖：搜索 / 字典 / 我的拍卖（代理 WM 公开+JWT 接口，大陆经 Worker 可达） */
     if (p === '/api/wm/auctions/search' && request.method === 'GET')  return handleAuctionSearch(request);
