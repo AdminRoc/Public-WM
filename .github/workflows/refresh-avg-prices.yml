@@ -28,12 +28,30 @@ jobs:
           fetch-depth: 1
 
       - name: 安装依赖
-        run: pip install aiohttp -q
+        run: pip install aiohttp cryptography -q
 
       - name: 拉取均价数据
         run: python3 .github/scripts/fetch_avg_prices.py
         env:
           AVG_PRICES_OUT: data/avg_prices_full.json
+          PRICE_DATA_SECRET: ${{ secrets.PRICE_DATA_SECRET }}
+
+      - name: 兜底加密（仅公库暴露内容，幂等）
+        run: python3 .github/scripts/encrypt_price.py --all
+        env:
+          PRICE_DATA_SECRET: ${{ secrets.PRICE_DATA_SECRET }}
+
+      - name: 校验回环（阻断失真）
+        run: |
+          python3 -c "
+          import sys; sys.path.insert(0, '.github/scripts'); import crypto_price, json, pathlib
+          p='data/avg_prices_full.json'
+          obj=crypto_price.load_json(p)
+          assert obj is not None, 'load fail'
+          raw=crypto_price.load_raw(p)
+          assert isinstance(raw, dict) and raw.get('ct'), 'not encrypted wrapper'
+          print(f'VERIFY OK: {p} {len(obj)} items')
+          "
 
       - name: 提交并推送
         id: commit

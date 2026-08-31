@@ -20,3 +20,7 @@ Thumbs.db
 # Python 缓存
 __pycache__/
 *.pyc
+
+# price-key derived at build, not committed with real key
+js/price-key.js
+

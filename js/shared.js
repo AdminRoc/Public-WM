@@ -33,7 +33,29 @@ function createReliableLoader(urls, parseFn, opts) {
         var r = await fetch(urls[i], { cache: 'no-cache' });
         if (!r.ok) continue;
         var j = await r.json();
-        if (parseFn(j)) return true;
+        // 兼容加密包装：若为 {v,ct,iv} 则尝试前端解密（边缘已解密，cdn 回退需此）
+        if (j && j.ct && j.iv && j.v===1) {
+          try {
+            var b64=(typeof window!=='undefined'&&window.__PRICE_KEY_B64)?window.__PRICE_KEY_B64:null;
+            if(b64){
+              var keyRaw=Uint8Array.from(atob(b64),function(c){return c.charCodeAt(0);});
+              var key=await crypto.subtle.importKey('raw',keyRaw,'AES-GCM',false,['decrypt']);
+              var iv=Uint8Array.from(atob(j.iv),function(c){return c.charCodeAt(0);});
+              var ct=Uint8Array.from(atob(j.ct),function(c){return c.charCodeAt(0);});
+              var pb=await crypto.subtle.decrypt({name:'AES-GCM',iv:iv},key,ct);
+              var txt=new TextDecoder().decode(pb);
+              if(j.sha256){
+                var hb=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(txt));
+                var hx=Array.from(new Uint8Array(hb)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+                if(hx!==j.sha256) throw new Error('sha256 mismatch');
+              }
+              j=JSON.parse(txt);
+            }
+          } catch(e) {}
+        }
+        var ok = parseFn(j);
+        if (ok && typeof ok.then === 'function') ok = await ok;
+        if (ok) return true;
       } catch (e) {}
     }
     return null;

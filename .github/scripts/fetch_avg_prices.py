@@ -207,8 +207,16 @@ async def run_pass(session, sem, tasks, prev_results, max_ranks, results, failed
             results[slug] = result
         if done % 300 == 0:
             os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
-            with open(OUT_PATH, "w", encoding="utf-8") as f:
-                json.dump(results, f, ensure_ascii=False, separators=(",", ":"))
+            if os.environ.get("PRICE_DATA_SECRET"):
+                try:
+                    import crypto_price as _cp
+                    _cp.save_json_encrypt(OUT_PATH, results)
+                except Exception:
+                    with open(OUT_PATH, "w", encoding="utf-8") as f:
+                        json.dump(results, f, ensure_ascii=False, separators=(",", ":"))
+            else:
+                with open(OUT_PATH, "w", encoding="utf-8") as f:
+                    json.dump(results, f, ensure_ascii=False, separators=(",", ":"))
         if done % BATCH_SIZE == 0 and done < len(pending):
             batch_pause = BATCH_PAUSE_MIN + random.random() * (BATCH_PAUSE_MAX - BATCH_PAUSE_MIN)
             await asyncio.sleep(batch_pause)
@@ -239,8 +247,17 @@ async def main():
     prev_results = {}
     if os.path.exists(OUT_PATH):
         try:
-            with open(OUT_PATH, "r", encoding="utf-8") as f:
-                prev_results = json.load(f) or {}
+            if os.environ.get("PRICE_DATA_SECRET"):
+                import crypto_price as _cp
+                v = _cp.load_json(OUT_PATH)
+                if v is not None:
+                    prev_results = v
+                else:
+                    with open(OUT_PATH, "r", encoding="utf-8") as f:
+                        prev_results = json.load(f) or {}
+            else:
+                with open(OUT_PATH, "r", encoding="utf-8") as f:
+                    prev_results = json.load(f) or {}
         except Exception:
             prev_results = {}
 
@@ -272,10 +289,23 @@ async def main():
     has_avg = sum(1 for v in results.values() if v.get("avg"))
     print(f"\n完成！均价:{has_avg}  共:{len(results)}/{len(slugs)}  耗时:{elapsed/60:.1f} 分钟")
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
-    with open(OUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, separators=(",", ":"))
-    kb = os.path.getsize(OUT_PATH) // 1024
-    print(f"已保存 {OUT_PATH}  ({kb} KB)")
+    if os.environ.get("PRICE_DATA_SECRET"):
+        try:
+            import crypto_price as _cp
+            _cp.save_json_encrypt(OUT_PATH, results)
+            kb = os.path.getsize(OUT_PATH) // 1024
+            print(f"已保存(加密) {OUT_PATH}  ({kb} KB)")
+        except Exception as e:
+            print(f"WARN 加密失败回退明文: {e}")
+            with open(OUT_PATH, "w", encoding="utf-8") as f:
+                json.dump(results, f, ensure_ascii=False, separators=(",", ":"))
+            kb = os.path.getsize(OUT_PATH) // 1024
+            print(f"已保存 {OUT_PATH}  ({kb} KB)")
+    else:
+        with open(OUT_PATH, "w", encoding="utf-8") as f:
+            json.dump(results, f, ensure_ascii=False, separators=(",", ":"))
+        kb = os.path.getsize(OUT_PATH) // 1024
+        print(f"已保存 {OUT_PATH}  ({kb} KB)")
 
 
 if __name__ == "__main__":
