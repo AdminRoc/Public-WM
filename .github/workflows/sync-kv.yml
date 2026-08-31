@@ -24,22 +24,31 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: 写入 EdgeOne KV (直写，不经 /api/update-kv，本地已提交 kv_put 真源)
+      - name: 写入 EdgeOne KV (直写 KV 优先，回退 HTTP)
         env:
           TENCENTCLOUD_SECRET_ID: ${{ secrets.TENCENTCLOUD_SECRET_ID }}
           TENCENTCLOUD_SECRET_KEY: ${{ secrets.TENCENTCLOUD_SECRET_KEY }}
           ZONE_ID: ${{ secrets.ZONE_ID }}
           KV_NAMESPACE: ${{ secrets.KV_NAMESPACE_PUBLIC }}
+          KV_WRITE_TOKEN: ${{ secrets.KV_WRITE_TOKEN }}
         run: |
           set -euo pipefail
-          test -n "${TENCENTCLOUD_SECRET_ID}" || { echo 'Missing TENCENTCLOUD_SECRET_ID'; exit 1; }
-          test -n "${TENCENTCLOUD_SECRET_KEY}" || { echo 'Missing TENCENTCLOUD_SECRET_KEY'; exit 1; }
-          test -n "${ZONE_ID}" || { echo 'Missing ZONE_ID'; exit 1; }
-          test -n "${KV_NAMESPACE}" || { echo 'Missing KV_NAMESPACE_PUBLIC'; exit 1; }
           pip install -q tencentcloud-sdk-python cryptography
-          for spec in avg_prices_full_json=data/avg_prices_full.json auction_dicts_json=data/auction-dicts.json wm_items_json=data/wm-items.json; do
-            key="${spec%%=*}"; file="${spec#*=}";
-            test -f "${file}" || { echo "skip $key ($file 不存在)"; continue; }
-            # 仅公库暴露内容（已加密包装，直接 put 密文）；>1MB 仅 cdn，已在产线控制
-            python3 .github/scripts/kv_put.py --zone "${ZONE_ID}" --ns "${KV_NAMESPACE}" --key "${key}" --file "${file}"
-          done
+          if [ -n "${TENCENTCLOUD_SECRET_ID:-}" ] && [ -n "${TENCENTCLOUD_SECRET_KEY:-}" ] && [ -n "${ZONE_ID:-}" ] && [ -n "${KV_NAMESPACE:-}" ]; then
+            echo "直写 KV via TencentCloud API"
+            for spec in avg_prices_full_json=data/avg_prices_full.json auction_dicts_json=data/auction-dicts.json wm_items_json=data/wm-items.json; do
+              key="${spec%%=*}"; file="${spec#*=}";
+              test -f "${file}" || { echo "skip $key ($file 不存在)"; continue; }
+              python3 .github/scripts/kv_put.py --zone "${ZONE_ID}" --ns "${KV_NAMESPACE}" --key "${key}" --file "${file}"
+            done
+          elif [ -n "${KV_WRITE_TOKEN:-}" ]; then
+            echo "回退 HTTP POST https://market.wfspeed.run/api/update-kv"
+            for spec in avg_prices_full_json=data/avg_prices_full.json auction_dicts_json=data/auction-dicts.json wm_items_json=data/wm-items.json; do
+              key="${spec%%=*}"; file="${spec#*=}";
+              test -f "${file}" || { echo "skip $key ($file 不存在)"; continue; }
+              python3 -c 'import json,sys; k,p=sys.argv[1:]; v=open(p,encoding="utf-8").read(); print(json.dumps({"key":k,"value":v},ensure_ascii=False))' "${key}" "${file}" > /tmp/payload.json
+              curl --fail --retry 3 --max-time 300 -X POST "https://market.wfspeed.run/api/update-kv" -H "Authorization: Bearer ${KV_WRITE_TOKEN}" -H 'Content-Type: application/json' --data-binary @/tmp/payload.json
+            done
+          else
+            echo "Missing KV credentials"; exit 1
+          fi
