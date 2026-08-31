@@ -1,9 +1,8 @@
-name: 同步数据到 EdgeOne KV
+name: 同步数据到 EdgeOne KV (直写 KV，不经自定义域)
 
-# 将本仓库 data/ 下的最新产物（均价/拍卖字典/物品总表）写入 EdgeOne Makers KV，
-# 前端经 market.wfspeed.run/api/kv?key=... 同源读取（大陆可达、实时、毫秒级），
-# 不再依赖 jsDelivr / raw / 反复构建部署的静态快照。
-# 需要仓库 Secrets：KV_WRITE_TOKEN（与边缘函数环境变量同值）。
+# 将本仓库 data/ 下的最新产物（均价/拍卖字典/物品总表）直写 Makers KV，
+# 前端经 market.wfspeed.run/api/kv?key=... 同源读取时边缘函数再 HKDF 解密。
+# 仅公库暴露内容反爬，私库不落密文。
 
 on:
   workflow_dispatch:
@@ -25,37 +24,32 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: 写入 EdgeOne KV
+      - name: 拉取私库 kv_put 真源
+        uses: actions/checkout@v5
+        with:
+          repository: AdminRoc/Ws-Web-core
+          token: ${{ secrets.PRIVATE_REPO_PAT }}
+          path: _private
+
+      - name: 覆盖 kv_put 到工作树
+        run: cp _private/.github/scripts/kv_put.py .github/scripts/kv_put.py
+
+      - name: 写入 EdgeOne KV (直写，不经 /api/update-kv)
         env:
-          KV_WRITE_TOKEN: ${{ secrets.KV_WRITE_TOKEN }}
+          TENCENTCLOUD_SECRET_ID: ${{ secrets.TENCENTCLOUD_SECRET_ID }}
+          TENCENTCLOUD_SECRET_KEY: ${{ secrets.TENCENTCLOUD_SECRET_KEY }}
+          ZONE_ID: ${{ secrets.ZONE_ID }}
+          KV_NAMESPACE: ${{ secrets.KV_NAMESPACE_PUBLIC }}
         run: |
-          set +e
-          fail=0
-          declare -A FILES=(
-            ["avg_prices_full_json"]="data/avg_prices_full.json"
-            ["auction_dicts_json"]="data/auction-dicts.json"
-            ["wm_items_json"]="data/wm-items.json"
-          )
-          for key in "${!FILES[@]}"; do
-            src="${FILES[$key]}"
-            if [ ! -f "$src" ]; then
-              echo "skip $key ($src 不存在)"
-              continue
-            fi
-            python3 -c "import json; content=open('$src').read(); open('/tmp/kv-payload.json','w').write(json.dumps({'key':'$key','value':content}))"
-            code=""
-            for attempt in 1 2 3; do
-              code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 300 \
-                -X POST "https://market.wfspeed.run/api/update-kv" \
-                -H "Authorization: Bearer ${KV_WRITE_TOKEN}" \
-                -H "Content-Type: application/json" \
-                --data-binary "@/tmp/kv-payload.json")
-              if [ "$code" = "200" ]; then break; fi
-              echo "kv $key 第 $attempt 次写入 HTTP $code，稍后重试..."
-              sleep 5
-            done
-            echo "kv $key <- $src -> HTTP $code"
-            if [ "$code" != "200" ]; then fail=1; fi
-            rm -f /tmp/kv-payload.json
+          set -euo pipefail
+          test -n "${TENCENTCLOUD_SECRET_ID}" || { echo 'Missing TENCENTCLOUD_SECRET_ID'; exit 1; }
+          test -n "${TENCENTCLOUD_SECRET_KEY}" || { echo 'Missing TENCENTCLOUD_SECRET_KEY'; exit 1; }
+          test -n "${ZONE_ID}" || { echo 'Missing ZONE_ID'; exit 1; }
+          test -n "${KV_NAMESPACE}" || { echo 'Missing KV_NAMESPACE_PUBLIC'; exit 1; }
+          pip install -q tencentcloud-sdk-python cryptography
+          for spec in avg_prices_full_json=data/avg_prices_full.json auction_dicts_json=data/auction-dicts.json wm_items_json=data/wm-items.json; do
+            key="${spec%%=*}"; file="${spec#*=}";
+            test -f "${file}" || { echo "skip $key ($file 不存在)"; continue; }
+            # 仅公库暴露内容（已加密包装，直接 put 密文）；>1MB 仅 cdn，已在产线控制
+            python3 .github/scripts/kv_put.py --zone "${ZONE_ID}" --ns "${KV_NAMESPACE}" --key "${key}" --file "${file}"
           done
-          if [ "$fail" != "0" ]; then echo "存在 KV 写入失败，请检查 KV_WRITE_TOKEN / 边缘函数部署"; exit 1; fi
