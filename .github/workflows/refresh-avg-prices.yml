@@ -42,6 +42,8 @@ jobs:
           PRICE_DATA_SECRET: ${{ secrets.PRICE_DATA_SECRET }}
 
       - name: 校验回环（阻断失真）
+        env:
+          PRICE_DATA_SECRET: ${{ secrets.PRICE_DATA_SECRET }}
         run: |
           python3 -c "
           import sys; sys.path.insert(0, '.github/scripts'); import crypto_price, json, pathlib
