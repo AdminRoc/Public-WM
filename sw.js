@@ -1,5 +1,5 @@
-/* Public-WM SW: 离线缓存静态资源，不代理 WM API/KV */
-const CACHE = 'bw-public-v1';
+﻿/* Public-WM SW: 绂荤嚎缂撳瓨闈欐€佽祫婧愶紝涓嶄唬鐞?WM API/KV */
+const CACHE = 'bw-public-v2';
 const ASSETS = [
   '/css/main.css',
   '/css/fui-core.css',
@@ -22,9 +22,9 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // 跨站字体（wfspeed.run → market/boss）由浏览器 CORS 处理，不经 SW，避免 Failed to convert
+  // 璺ㄧ珯瀛椾綋锛坵fspeed.run 鈫?market/boss锛夌敱娴忚鍣?CORS 澶勭悊锛屼笉缁?SW锛岄伩鍏?Failed to convert
   if (url.hostname !== location.hostname && /\.(woff2|woff|ttf|otf)$/.test(url.pathname)) return;
-  // cdn/raw 的 wm-items/avg 走 stale-while-revalidate（Public 1.8M/590k，Private 同）
+  // cdn/raw 鐨?wm-items/avg 璧?stale-while-revalidate锛圥ublic 1.8M/590k锛孭rivate 鍚岋級
   if (url.hostname.includes('cdn.jsdelivr.net') || url.hostname.includes('raw.githubusercontent.com')) {
     e.respondWith(caches.open(CACHE).then(c => c.match(e.request).then(cached => {
       const fetched = fetch(e.request).then(res => { if(res.ok) c.put(e.request, res.clone()).catch(()=>{}); return res; }).catch(()=>cached);
@@ -32,9 +32,9 @@ self.addEventListener('fetch', e => {
     })));
     return;
   }
-  // WM API 与 KV 走网络，不缓存（WM 需实时，KV 已有 10min 边缘缓存）
+  // WM API 涓?KV 璧扮綉缁滐紝涓嶇紦瀛橈紙WM 闇€瀹炴椂锛孠V 宸叉湁 10min 杈圭紭缂撳瓨锛?
   if (url.pathname.startsWith('/api/') || url.hostname.includes('warframe.market') || url.hostname.includes('pwm-api')) return;
-  // 静态资源 Cache First
+  // 闈欐€佽祫婧?Cache First
   if (/\.(css|js|woff2|png|svg|webp)$/.test(url.pathname) || url.pathname.startsWith('/picture/') || url.pathname.startsWith('/fonts/')) {
     e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => {
       const copy = res.clone();
