@@ -1,5 +1,5 @@
 ﻿/* Public-WM SW: offline cache static, not WM API/KV */
-const CACHE = 'bw-public-v4';
+const CACHE = 'bw-public-v5';
 const ASSETS = [
   '/css/main.css',
   '/css/fui-core.css',
