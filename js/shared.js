@@ -675,10 +675,9 @@ function bindLogout() {
 const _batchState = {}; // idPrefix -> { failures, retryFn }
 const _batchAbort = {}; // idPrefix -> { requested: bool }
 
-/* 批量面板（bw-batch-panel）动态显示：默认隐藏，仅当批量操作激活时才出现
-   （进度条 + 停止按钮 + 失败面板都在这层框体内），空闲时整块缩回。 */
+/* 批量面板（bw-batch-panel）工作区常驻：进度条/失败面板由 runBatch 控制显隐，工作区（价格/数量/倍率）永不收回 */
 function _batchPanelShow() { const p = document.getElementById('bw-batch-panel'); if (p) p.style.display = ''; }
-function _batchPanelHide() { const p = document.getElementById('bw-batch-panel'); if (p) p.style.display = 'none'; }
+function _batchPanelHide() { /* 工作区常驻，不整体收回 */ }
 
 async function runBatch(items, workFn, opts) {
   opts = opts || {};
@@ -755,10 +754,10 @@ async function runBatch(items, workFn, opts) {
     txt.style.display = '';
     txt.style.color = 'var(--c-warn)';
     txt.textContent = '已中止（' + done + ' / ' + items.length + ' 完成）';
-    setTimeout(function() { txt.style.display = 'none'; txt.style.color = ''; _batchPanelHide(); }, 3500);
+    setTimeout(function() { txt.style.display = 'none'; txt.style.color = ''; }, 3500);
   } else if (!failures.length) {
-    /* 正常结束且无失败：整体缩回 */
-    _batchPanelHide();
+    /* 正常结束且无失败：仅收进度条，工作区常驻 */
+    // _batchPanelHide() 已禁用
   }
   /* 有失败：保留面板显示失败列表（showBatchFail 内），关闭后由 hideBatchFail 收起 */
 
@@ -802,7 +801,7 @@ function hideBatchFail(idPrefix) {
   if (toggle) toggle.textContent = '展开详情';
   const n = document.getElementById(idPrefix + '-fail-n');
   if (n) n.textContent = '0';
-  _batchPanelHide(); // 失败面板关闭 → 批量面板整体缩回
+  /* 失败面板关闭仅收失败区，工作区常驻 */
 }
 
 async function retryBatchFailures(idPrefix) {
