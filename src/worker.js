@@ -636,6 +636,37 @@ async function wmPublicFetch(path, overrideHeaders) {
   return fetchRetry(WM_API + path, { headers });
 }
 
+let _avgBulkCache = null;
+let _avgBulkTs = 0;
+let _avgInflight = null;
+async function getAvgBulk() {
+  if (_avgBulkCache && Date.now() - _avgBulkTs < 10*60*1000) return _avgBulkCache;
+  if (_avgInflight) return _avgInflight;
+  _avgInflight = (async () => {
+    try {
+      // 优先从同站 Pages 的 KV 读取全量均价（已解密，10min 内存）
+      const r = await fetchRetry('https://market.wfspeed.run/api/kv?key=avg_prices_full_json', {}, 1);
+      if (r.ok) {
+        const j = await r.json();
+        const bulk = j && j.data ? j.data : j;
+        if (bulk && typeof bulk === 'object' && Object.keys(bulk).length) {
+          _avgBulkCache = bulk;
+          _avgBulkTs = Date.now();
+          return _avgBulkCache;
+        }
+      }
+    } catch {}
+    return _avgBulkCache;
+  })();
+  try { return await _avgInflight; } finally { _avgInflight = null; }
+}
+async function handleWmAvgPrices(request) {
+  if (!getSession(request)) return jsonResponse({ error: '请先登录' }, 401);
+  const bulk = await getAvgBulk();
+  if (!bulk || !Object.keys(bulk).length) return jsonResponse({ error: '均价数据源暂不可用' }, 502);
+  return jsonResponse({ data: bulk });
+}
+
 /* 均价计算通用函数（v2 订单字段：type/user.status/visible/platinum）
  * 口径：样本 = in-game + online 的卖单合在一起统计（offline 永远不算——挂机价失真）
  *   1. count>=3：去掉最低价（第 1 位），取第 2 和第 3 位价格的平均 = avg
@@ -665,7 +696,7 @@ function calcAvg(allOrders) {
   return result;
 }
 
-// GET /api/wm/price/:slug —— 均价查询：内存缓存 → 实时拉取
+// GET /api/wm/price/:slug —— 均价查询：bulk 10min → 单查回退
 async function handleWmPrice(request, slug) {
   if (!getSession(request)) return jsonResponse({ error: '请先登录' }, 401);
 
@@ -673,7 +704,18 @@ async function handleWmPrice(request, slug) {
   const cached = memCacheGet(_priceCache, cacheKey);
   if (cached) return jsonResponse({ data: cached });
 
-  // 实时拉取 v2 订单
+  // 优先 bulk 全量（PWM_KV 10min），命中即免单次 WM 拉取
+  try {
+    const bulk = await getAvgBulk();
+    if (bulk && bulk[slug]) {
+      const hit = bulk[slug];
+      // bulk 中已是 calcAvg 结果，直接缓存
+      memCachePut(_priceCache, cacheKey, hit, PRICE_CACHE_TTL, CACHE_MAX_KEYS);
+      return jsonResponse({ data: hit });
+    }
+  } catch {}
+
+  // 回退实时拉取 v2 订单
   try {
     const resp = await wmPublicFetch('/v2/orders/item/' + encodeURIComponent(slug));
     if (!resp.ok) return jsonResponse({ data: { avg: null, count: 0, used: 0, _err: resp.status } });
@@ -1075,6 +1117,7 @@ async function handleFetch(request, env) {
       return new Response(t, { status: r.status, headers: { 'Content-Type': 'application/json' } });
     }
 
+    if (p === '/api/wm/avg-prices' && request.method === 'GET') return handleWmAvgPrices(request);
     const priceMatch = p.match(/^\/api\/wm\/price\/([^/]+)$/);
     if (priceMatch && request.method === 'GET') return handleWmPrice(request, priceMatch[1]);
 
