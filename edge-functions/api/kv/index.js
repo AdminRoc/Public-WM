@@ -32,6 +32,17 @@ export default async function onRequest({ request, env }) {
       return new Response('missing key', { status: 400 });
     }
     key = key.replace(/[.-]/g, '_');
+    // Cache API 10min：同 Private src/worker.js:624 getItemsData 的 caches.default 60s+10min 三层，避免每次回源 PWM_KV
+    let cache = null;
+    let cacheKey = null;
+    try { cache = caches.default; } catch {}
+    if (cache) {
+      try {
+        cacheKey = new Request(url.toString(), { method: 'GET' });
+        const hit = await cache.match(cacheKey);
+        if (hit) return hit;
+      } catch {}
+    }
     const value = await PWM_KV.get(key, { type: 'text' });
     if (value == null) {
       return new Response('not found', { status: 404 });
@@ -44,7 +55,7 @@ export default async function onRequest({ request, env }) {
         out = JSON.stringify(dec);
       }
     } catch (_) {}
-    return new Response(out, {
+    const resp = new Response(out, {
       status: 200,
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
@@ -52,6 +63,10 @@ export default async function onRequest({ request, env }) {
         'Access-Control-Allow-Origin': '*',
       },
     });
+    if (cache && cacheKey) {
+      try { cache.put(cacheKey, resp.clone()).catch(function(){}); } catch {}
+    }
+    return resp;
   } catch (e) {
     return new Response('kv error: ' + (e && e.message ? e.message : String(e)), { status: 500 });
   }
