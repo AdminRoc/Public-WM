@@ -89,9 +89,9 @@ const ELEMENTS = [
   { slug: 'radiation',   zh: '辐射',   en: 'Radiation' },
 ];
 const POLARITIES = [
-  { slug: 'madurai', zh: '马杜莱', en: 'Madurai', icon: '/picture/Madurai.webp' },
-  { slug: 'vazarin', zh: '瓦扎林', en: 'Vazarin', icon: '/picture/Vazarin.webp' },
-  { slug: 'naramon', zh: '纳拉蒙', en: 'Naramon', icon: '/picture/Naramon.webp' },
+  { slug: 'madurai', zh: '马杜莱', en: 'Madurai', icon: 'picture/Madurai.webp' },
+  { slug: 'vazarin', zh: '瓦扎林', en: 'Vazarin', icon: 'picture/Vazarin.webp' },
+  { slug: 'naramon', zh: '纳拉蒙', en: 'Naramon', icon: 'picture/Naramon.webp' },
 ];
 
 function L(obj) { return _aLang === 'zh' ? (obj.zh || obj.en) : (obj.en || obj.zh); }
@@ -189,57 +189,36 @@ const ATTR_ZH = {
   'chance_to_gain_combo_count':       '的几率来获得连击数',
 };
 
-/* ── 字典加载 ──
-   拍卖字典由本仓库 .github/workflows/harvest-auction-dicts.yml 产出
-   data/auction-dicts.json（格式 { name: [items] }，含 i18n 中英双语）。
-   页面一次性从 jsDelivr 读取最新产物（带 raw 回退），不再经 Worker 逐个
-   拉取——既省 Worker 流量，也避免腾讯云 Pages 手动低频部署导致快照过时。 */
-let _dictsLoaded = false;
-async function ensureDictsLoaded() {
-  if (_dictsLoaded) return;
-  /* 同源 EdgeOne KV（实时最新）→ jsDelivr → raw → 同源 Pages 快照（兜底）；
-     持续重试直到成功，成功即自动停止 */
-  await createReliableLoader(
-    [
-      '/api/kv?key=auction_dicts_json',
-      'https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/auction-dicts.json',
-      'https://raw.githubusercontent.com/AdminRoc/Public-WM/main/data/auction-dicts.json',
-      '/data/auction-dicts.json',
-    ],
-    function(grouped) {
-      if (!grouped || typeof grouped !== 'object') return false;
-      var any = false;
-      for (var key in grouped) {
-        var arr = Array.isArray(grouped[key]) ? grouped[key] : [];
-        // 缺 zh-hans 时从硬编码表注入（兜底）
-        var zhMap = key === 'riven/attributes' ? ATTR_ZH
-                  : key === 'lich/weapons'     ? LICH_WEAPON_ZH
-                  : key === 'sister/weapons'   ? SISTER_WEAPON_ZH
-                  : null;
-        if (zhMap) {
-          arr.forEach(function(it) {
-            if (it.i18n && !it.i18n['zh-hans'] && zhMap[it.slug]) {
-              it.i18n['zh-hans'] = { name: zhMap[it.slug] };
-            }
-          });
-        }
-        var map = {};
-        arr.forEach(function(it) { map[it.slug] = it; });
-        _dicts[key] = map; _dictArr[key] = arr;
-        if (arr.length) any = true;
-      }
-      if (!any) return false;
-      _dictsLoaded = true;
-      return true;
-    },
-    { retryDelay: 2500 }
-  ).promise;
-}
-
+/* ── 字典加载 ── */
 async function loadDict(name) {
   if (_dicts[name]) return _dicts[name];
-  await ensureDictsLoaded();
-  return _dicts[name] || {};
+  const j = await apiFetch('/auctions/dict/' + name);
+  let arr = [];
+  if (j) {
+    const p = j.payload || j.data || j;
+    if (Array.isArray(p)) {
+      arr = p;
+    } else if (p && typeof p === 'object') {
+      const key = name.split('/')[1];
+      arr = p[key] || Object.values(p).find(function(v) { return Array.isArray(v); }) || [];
+    }
+  }
+  // 代理未透传 Language 头时缺 zh-hans，从硬编码表注入
+  const zhMap = name === 'riven/attributes' ? ATTR_ZH
+              : name === 'lich/weapons'     ? LICH_WEAPON_ZH
+              : name === 'sister/weapons'   ? SISTER_WEAPON_ZH
+              : null;
+  if (zhMap) {
+    arr.forEach(function(it) {
+      if (it.i18n && !it.i18n['zh-hans'] && zhMap[it.slug]) {
+        it.i18n['zh-hans'] = { name: zhMap[it.slug] };
+      }
+    });
+  }
+  const map = {};
+  arr.forEach(function(it) { map[it.slug] = it; });
+  _dicts[name] = map; _dictArr[name] = arr;
+  return map;
 }
 
 /* ══════════════════════════════════════════════════════
@@ -321,8 +300,7 @@ function acFieldHtml(id, label, placeholder) {
     +   '<div class="bw-ac-drop" id="' + id + '-drop"></div>'
     + '</div></div>';
 }
-/* 自定义 select 组件：接受 opts=[{value,label,icon?}] 数组。
-   Public-WM 不请求任何缩略图/图标，icon 一律忽略，下拉仅显示文字。 */
+/* 自定义 select 组件：接受 opts=[{value,label,icon?}] 数组 */
 function selFieldHtml(id, label, opts) {
   var firstLabel = opts.length ? opts[0].label : '';
   var firstValue = opts.length ? opts[0].value : '';
@@ -557,14 +535,17 @@ function _rivenPasses(a){
   if (p3 === RIVEN_POS_NONE) needPos = 2;
   else if (_isRealRivenAttr(p3)) needPos = 3;
   else if (p3 === RIVEN_POS_ANY) needPos = 3;
+  // p3 为空(不限)时 needPos 保持 null，不筛正数
   if (neg === RIVEN_NEG_NONE) needNeg = 0;
   else if (neg === RIVEN_NEG_ANY) needNeg = 1;
   else if (_isRealRivenAttr(neg)) needNeg = 1;
+  // neg 为空(不限)时 needNeg 保持 null
   var attrs = (a.item && a.item.attributes) || [];
   var pc = 0, nc = 0;
   for (var i=0;i<attrs.length;i++) attrs[i].positive ? pc++ : nc++;
   if (needPos !== null && pc !== needPos) return false;
   if (needNeg !== null && nc !== needNeg) return false;
+  // 指定词条必须包含（正3/负具体值已由服务端包含匹配，但二次校验防漏）
   if (_isRealRivenAttr(p3)){
     var havePos = {};
     for (var i=0;i<attrs.length;i++) if(attrs[i].positive) havePos[attrs[i].url_name]=1;
@@ -736,7 +717,7 @@ function renderResults(list, listId, countId) {
   if (!box) return;
   if (!list.length) {
     box.innerHTML = '<div class="bw-empty-state">'
-      + '<img src="/picture/warframe-logo-blue-black.svg" class="bw-empty-state-icon" alt="">'
+      + '<img src="picture/warframe-logo-blue-black.svg" class="bw-empty-state-icon" alt="">'
       + '<div class="bw-empty-state-title">暂无匹配的拍卖</div>'
       + '<div class="bw-empty-state-sub">尝试调整搜索条件或词条筛选</div>'
       + '</div>';
@@ -1010,6 +991,308 @@ async function doBulkPrice() {
   setTimeout(function() { setMineStatus(''); }, 3500);
 }
 
+/* ── OCR 识图解析：从截图识别文字，自动填入上架表单 ── */
+function parseOcrIntoForm(text) {
+  if (!text) return;
+
+  /* Step 0: OCR 文字后处理
+     Tesseract 识别游戏字体时最常见的两类噪音：
+     ① 汉字间插空格："鳄 神" / "多 里 射 击" → 去掉汉字间的空格
+     ② 字母/数字与汉字之间的空格要保留（"鳄神 Sati-critades" 里的空格有意义）
+     另外：把连续 3+ 个空格/制表符收缩成换行，方便逐行解析 */
+  const t = text
+    .replace(/([一-鿿])\s+(?=[一-鿿])/g, '$1')
+    .replace(/[^\S\n]{3,}/g, '\n');
+
+  if (_aType === 'riven') {
+    const weapArr = _dictArr['riven/weapons'] || [];
+    const attrArr = _dictArr['riven/attributes'] || [];
+    const lines = t.split(/[\n\r]+/).map(function(l){ return l.trim(); }).filter(Boolean);
+
+    /* 第一步：武器名 + 裂罅名
+       真实格式："蛇发女妖 Crita-visitis"——中文武器名 + 空格 + 拉丁裂罅名同一行。
+       逐行扫描；跳过以 +/- 开头的词条行和只有数字的行。 */
+    let weapMatch = null, rivenName = '';
+    for (const line of lines) {
+      if (/^[\+\-＋－]/.test(line) || /^\d/.test(line)) continue;
+      for (const w of weapArr) {
+        const zh = (w.i18n && w.i18n['zh-hans'] && w.i18n['zh-hans'].name) || '';
+        const en = (w.i18n && w.i18n.en && w.i18n.en.name) || '';
+        const zhIdx = zh ? line.indexOf(zh) : -1;
+        const enIdx = en ? line.toLowerCase().indexOf(en.toLowerCase()) : -1;
+        if (zhIdx !== -1) {
+          weapMatch = w;
+          /* 裂罅名：武器中文名之后的首个 Latin 词（含连字符）*/
+          const after = line.slice(zhIdx + zh.length).trim();
+          const nm = after.match(/([A-Za-z][A-Za-z\-']{2,})/);
+          if (nm) rivenName = nm[1];
+          break;
+        } else if (enIdx !== -1) {
+          weapMatch = w;
+          const after = line.slice(enIdx + en.length).trim();
+          const nm = after.match(/([A-Za-z][A-Za-z\-']{2,})/);
+          if (nm) rivenName = nm[1];
+          break;
+        }
+      }
+      if (weapMatch) break;
+    }
+    /* 兜底：没匹配到武器时，从任意行找首字母大写的 Latin 词（Crita-visitis / Magnadra 格式） */
+    if (!rivenName) {
+      for (const line of lines) {
+        const nm = line.match(/\b([A-Z][a-z]+-[a-z]+|[A-Z][a-z]{4,})\b/);
+        if (nm) { rivenName = nm[1]; break; }
+      }
+    }
+
+    if (weapMatch) {
+      const inp = document.getElementById('bw-cf-weapon');
+      if (inp) { inp.value = acName(weapMatch); inp.dataset.slug = weapMatch.slug || ''; }
+    }
+    if (rivenName) {
+      const el = document.getElementById('bw-cf-rivname');
+      if (el) el.value = rivenName;
+    }
+
+    /* 第二步：极性（OCR 图标不可靠，仅匹配明确出现在文字里的关键词） */
+    const polMap = [
+      { slug: 'madurai', keys: ['madurai','马杜莱','力量'] },
+      { slug: 'vazarin', keys: ['vazarin','瓦扎林','防御'] },
+      { slug: 'naramon', keys: ['naramon','纳拉蒙','斗争'] },
+    ];
+    const tl = t.toLowerCase();
+    for (const pm of polMap) {
+      if (pm.keys.some(function(k){ return tl.indexOf(k.toLowerCase()) !== -1; })) {
+        const hid = document.getElementById('bw-cf-polarity');
+        const lbl = document.getElementById('bw-cf-polarity-lbl');
+        if (hid) hid.value = pm.slug;
+        const pol = POLARITIES.find(function(p){ return p.slug === pm.slug; });
+        if (lbl && pol) {
+          lbl.innerHTML = L(pol);
+        }
+        const wrap = document.getElementById('bw-cf-polarity-wrap');
+        if (wrap) wrap.querySelectorAll('.bw-csel-item').forEach(function(el) {
+          el.classList.toggle('active', el.dataset.value === pm.slug);
+        });
+        break;
+      }
+    }
+
+    /* 第三步：词条解析
+       真实格式：±VALUE% 词条名[（附加说明）]
+       例："＋208.4% 暴击几率"  "+152.4% 射速（弓类武器效果加倍）"  "-85.5% 多重射击"
+       已知 OCR 噪音：
+         - 汉字间空格已在 Step 0 去除
+         - "重"→"里" 等单字误读：精确匹配失败时用字符重叠率≥75% 的模糊匹配兜底
+         - OCR 漏读 %：同时尝试"带符号浮点数"作为兜底（如 "-85.506" 来自 "-85.5%"）
+         - 行首/尾 OCR 乱码（如 "\,"）：清理掉再匹配 */
+
+    /* 字符重叠模糊匹配：query 中每个字在 text 里出现的比例 */
+    function _cjkFuzzy(text, query) {
+      if (!query || query.length < 3) return 0;  // 短词不模糊（避免误命中）
+      let hits = 0;
+      for (let i = 0; i < query.length; i++) { if (text.indexOf(query[i]) !== -1) hits++; }
+      return hits / query.length;
+    }
+
+    const attrSlots = ['bw-cf-pos1','bw-cf-pos2','bw-cf-pos3','bw-cf-neg'];
+    let posIdx = 0, negFilled = false;
+    for (const line of lines) {
+      /* 匹配数值：①有%的标准格式 ②OCR漏读%的浮点兜底（两位整数+小数，带正负号） */
+      const valM = line.match(/([+\-＋－]\s*\d+\.?\d*)\s*%/)
+                || line.match(/(\d+\.?\d*)\s*%/)
+                || line.match(/([+\-＋－]\s*\d{2,3}\.\d)/);
+      if (!valM) continue;
+      const rawSign = valM[1].replace(/\s/g, '')[0];
+      const isNeg = rawSign === '-' || rawSign === '－';
+      const val = parseFloat(valM[1].replace(/[＋－]/g, '').replace(/\s/g, ''));
+      if (isNaN(val) || val < 1) continue;  // 排除噪音（真实词条值均 ≥ 1）
+
+      /* 提取词条候选：去掉数值、括号说明、行首/尾 OCR 乱码、非 CJK/字母字符 */
+      const attrText = line
+        .replace(/[+\-＋－]?\s*\d+\.?\d*\s*%?/, '')
+        .replace(/[（(][^）)]*[）)]/g, '')
+        .replace(/[^一-鿿a-zA-Z\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!attrText) continue;
+
+      /* 最长匹配：优先精确；精确失败时用模糊（字符重叠≥75%）兜底 */
+      let matchedAttr = null, bestLen = 0;
+      for (const a of attrArr) {
+        const zh = (a.i18n && a.i18n['zh-hans'] && a.i18n['zh-hans'].name) || '';
+        const en = (a.i18n && a.i18n.en && a.i18n.en.name) || '';
+        if (zh && attrText.indexOf(zh) !== -1 && zh.length > bestLen) {
+          matchedAttr = a; bestLen = zh.length;
+        } else if (!matchedAttr && zh && _cjkFuzzy(attrText, zh) >= 0.75 && zh.length > bestLen) {
+          matchedAttr = a; bestLen = zh.length;
+        } else if (en && attrText.toLowerCase().indexOf(en.toLowerCase()) !== -1 && en.length > bestLen) {
+          matchedAttr = a; bestLen = en.length;
+        }
+      }
+      if (!matchedAttr) continue;
+
+      let slotId;
+      if (isNeg && !negFilled) { slotId = 'bw-cf-neg'; negFilled = true; }
+      else if (!isNeg && posIdx < 3) { slotId = attrSlots[posIdx++]; }
+      else continue;
+      const inpEl = document.getElementById(slotId);
+      const valEl = document.getElementById(slotId + '-val');
+      if (inpEl) { inpEl.value = acName(matchedAttr); inpEl.dataset.slug = matchedAttr.slug || ''; }
+      if (valEl) valEl.value = val.toFixed(1);
+    }
+
+    /* 第四步：段位 + 循环次数
+       真实格式（同一行）："段位 10 ⟳44" 或 "段位 16 ⟳268"
+       ⟳ 会被 OCR 读成乱码；兜底策略：段位数字后的第二组纯数字 = 循环次数。
+       段位无需限制在 ≤8（加 Forma 后最高可达段位基数 + Forma 数 × 2）。 */
+    for (const line of lines) {
+      const rankM = line.match(/段位\s*(\d+)/);
+      if (rankM) {
+        const rankEl = document.getElementById('bw-cf-rank');
+        if (rankEl) rankEl.value = parseInt(rankM[1], 10);
+        /* 循环次数：段位数字后去掉所有非数字直到找到下一组数字 */
+        const afterRank = line.slice(rankM.index + rankM[0].length);
+        const rollM = afterRank.match(/\d+/);
+        if (rollM) {
+          const rollEl = document.getElementById('bw-cf-rerolls');
+          if (rollEl) rollEl.value = parseInt(rollM[0], 10);
+        }
+      }
+    }
+
+    /* 循环次数兜底：明确写了"循环"关键词 */
+    if (!document.getElementById('bw-cf-rerolls')?.value) {
+      const rollM = t.match(/循环\s*(\d+)/) || t.match(/[Rr]e[\-]?[Rr]oll[s]?\s*[：:\s]*(\d+)/);
+      if (rollM) {
+        const el = document.getElementById('bw-cf-rerolls');
+        if (el) el.value = parseInt(rollM[1], 10);
+      }
+    }
+
+    /* MR：仅匹配文字中明确写出的"MR XX"或"掌握度 XX"；
+       右上角的数字是 mod 消耗量而非 MR，旁边的图标是极性符号，均不解析 */
+    const mrM = t.match(/MR\s*(\d+)/i) || t.match(/掌握度[：:\s]*(\d+)/);
+    if (mrM) {
+      const mr = parseInt(mrM[1], 10);
+      if (mr >= 0 && mr <= 30) {
+        const el = document.getElementById('bw-cf-mr');
+        if (el) el.value = mr;
+      }
+    }
+  } else {
+    /* 赤毒玄骸 / 帕尔沃斯的姐妹 */
+    const weapArr = _dictArr[_aType + '/weapons'] || [];
+    const zhMap = _aType === 'lich' ? LICH_WEAPON_ZH : SISTER_WEAPON_ZH;
+    let weapMatch = null;
+    /* 优先匹配中文名（更精准） */
+    for (const [slug, zh] of Object.entries(zhMap)) {
+      if (t.indexOf(zh) !== -1) {
+        weapMatch = weapArr.find(function(w){ return w.slug === slug; });
+        break;
+      }
+    }
+    if (!weapMatch) {
+      for (const w of weapArr) {
+        const en = (w.i18n && w.i18n.en && w.i18n.en.name) || w.en || '';
+        if (en && t.toLowerCase().indexOf(en.toLowerCase()) !== -1) { weapMatch = w; break; }
+      }
+    }
+    if (weapMatch) {
+      const inp = document.getElementById('bw-cf-weapon');
+      if (inp) { inp.value = acName(weapMatch); inp.dataset.slug = weapMatch.slug || ''; }
+    }
+
+    /* 元素 */
+    for (const el of ELEMENTS) {
+      if (t.indexOf(el.zh) !== -1 || t.toLowerCase().indexOf(el.en.toLowerCase()) !== -1) {
+        const hid = document.getElementById('bw-cf-element');
+        const lbl = document.getElementById('bw-cf-element-lbl');
+        if (hid) hid.value = el.slug;
+        if (lbl) lbl.textContent = L(el);
+        const wrap = document.getElementById('bw-cf-element-wrap');
+        if (wrap) wrap.querySelectorAll('.bw-csel-item').forEach(function(item) {
+          item.classList.toggle('active', item.dataset.value === el.slug);
+        });
+        break;
+      }
+    }
+
+    /* 幻纹 */
+    if (/幻纹|ephemera/i.test(t)) {
+      const hid = document.getElementById('bw-cf-ephemera');
+      const lbl = document.getElementById('bw-cf-ephemera-lbl');
+      if (hid) hid.value = 'true';
+      if (lbl) lbl.textContent = '有';
+      const wrap = document.getElementById('bw-cf-ephemera-wrap');
+      if (wrap) wrap.querySelectorAll('.bw-csel-item').forEach(function(item) {
+        item.classList.toggle('active', item.dataset.value === 'true');
+      });
+    }
+
+    /* 伤害% */
+    const dmgM = t.match(/(\d{2,3})\s*%/);
+    if (dmgM) {
+      const dmg = parseInt(dmgM[1], 10);
+      if (dmg >= 25 && dmg <= 60) {
+        const el = document.getElementById('bw-cf-damage');
+        if (el) el.value = dmg;
+      }
+    }
+  }
+}
+
+/* OCR 区块 HTML + 初始化（每次 openCreateModal 时调用） */
+let _modalOcrIntake = null;
+function initModalOcr(containerEl) {
+  if (_modalOcrIntake) { _modalOcrIntake.destroy(); _modalOcrIntake = null; }
+  const dropEl  = containerEl.querySelector('.bw-modal-ocr-drop');
+  const stripEl = containerEl.querySelector('.bw-modal-ocr-strip');
+  const statusEl = containerEl.querySelector('.bw-modal-ocr-status');
+  const textEl  = containerEl.querySelector('.bw-modal-ocr-text');
+  const fillBtn = containerEl.querySelector('.bw-modal-ocr-fill');
+  if (!dropEl || !stripEl) return;
+
+  /* toggle 展开/收起 */
+  const toggleBtn = containerEl.querySelector('.bw-modal-ocr-toggle');
+  const body = containerEl.querySelector('.bw-modal-ocr-body');
+  if (toggleBtn && body) {
+    toggleBtn.addEventListener('click', function() {
+      const open = body.style.display !== 'none';
+      body.style.display = open ? 'none' : '';
+      toggleBtn.classList.toggle('is-open', !open);
+    });
+  }
+
+  _modalOcrIntake = initScreenshotIntake({
+    dropEl: dropEl,
+    stripEl: stripEl,
+    autoStart: true,
+    onStatus: function(s) { if (statusEl) statusEl.textContent = s || ''; },
+    onTextRecognized: function(text) {
+      if (!text) return;
+      if (body && body.style.display === 'none') body.style.display = '';
+      if (textEl) textEl.value = textEl.value ? textEl.value + '\n---\n' + text : text;
+    },
+    onError: function(e) { if (statusEl) statusEl.textContent = '识别失败：' + (e && e.message || e); },
+  });
+
+  if (fillBtn && textEl) {
+    fillBtn.addEventListener('click', function() {
+      parseOcrIntoForm(textEl.value);
+      fillBtn.textContent = '✓ 已填入';
+      setTimeout(function() { fillBtn.textContent = '解析并填入'; }, 1800);
+    });
+  }
+
+  const clearBtn = containerEl.querySelector('.bw-modal-ocr-clear');
+  if (clearBtn && textEl && stripEl) {
+    clearBtn.addEventListener('click', function() {
+      textEl.value = '';
+      stripEl.innerHTML = '';
+    });
+  }
+}
 
 /* 上架弹窗 */
 function openCreateModal() {
@@ -1020,7 +1303,32 @@ function openCreateModal() {
   errEl.textContent = '';
 
   if (_aType === 'riven') {
+    const weapArr = _dictArr['riven/weapons'] || [];
+    const attrArr = _dictArr['riven/attributes'] || [];
     wrap.innerHTML = `
+      <div class="bw-modal-ocr-block">
+        <div class="bw-modal-ocr-header">
+          <button type="button" class="bw-modal-ocr-toggle">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="1" y="1" width="12" height="12" rx="1.5"/><path d="M1 5h12M5 5v8"/>
+            </svg>
+            识图辅助填入
+          </button>
+          <span class="bw-modal-ocr-status"></span>
+        </div>
+        <div class="bw-modal-ocr-body" style="display:none">
+          <div class="bw-modal-ocr-drop">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1v9M4 6l4 4 4-4"/><path d="M2 13h12"/></svg>
+            点击选择截图，或 Ctrl+V 粘贴
+          </div>
+          <div class="bw-modal-ocr-strip"></div>
+          <textarea class="bw-modal-ocr-text" placeholder="识别到的文字（可在此手动修改后再填入）…" rows="3"></textarea>
+          <div class="bw-modal-ocr-actions">
+            <button type="button" class="bw-modal-ocr-fill">解析并填入</button>
+            <button type="button" class="bw-modal-ocr-clear">清空文字</button>
+          </div>
+        </div>
+      </div>
       <div class="bw-auc-form-grid">
         <div class="bw-auc-form-field">
           <label>武器名称 <span class="req">*</span></label>
@@ -1098,8 +1406,33 @@ function openCreateModal() {
     initAc('bw-cf-pos3', function() { return _dictArr['riven/attributes'] || []; }, false);
     initAc('bw-cf-neg',  function() { return _dictArr['riven/attributes'] || []; }, false);
     initSel('bw-cf-polarity');
+    initModalOcr(wrap);
   } else {
+    const weapArr = _dictArr[_aType + '/weapons'] || [];
     wrap.innerHTML = `
+      <div class="bw-modal-ocr-block">
+        <div class="bw-modal-ocr-header">
+          <button type="button" class="bw-modal-ocr-toggle">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="1" y="1" width="12" height="12" rx="1.5"/><path d="M1 5h12M5 5v8"/>
+            </svg>
+            识图辅助填入
+          </button>
+          <span class="bw-modal-ocr-status"></span>
+        </div>
+        <div class="bw-modal-ocr-body" style="display:none">
+          <div class="bw-modal-ocr-drop">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1v9M4 6l4 4 4-4"/><path d="M2 13h12"/></svg>
+            点击选择截图，或 Ctrl+V 粘贴
+          </div>
+          <div class="bw-modal-ocr-strip"></div>
+          <textarea class="bw-modal-ocr-text" placeholder="识别到的文字（可在此手动修改后再填入）…" rows="3"></textarea>
+          <div class="bw-modal-ocr-actions">
+            <button type="button" class="bw-modal-ocr-fill">解析并填入</button>
+            <button type="button" class="bw-modal-ocr-clear">清空文字</button>
+          </div>
+        </div>
+      </div>
       <div class="bw-auc-form-grid">
         <div class="bw-auc-form-field">
           <label>武器名称 <span class="req">*</span></label>
@@ -1160,6 +1493,7 @@ function openCreateModal() {
     initAc('bw-cf-weapon', function() { return _dictArr[_aType + '/weapons'] || []; }, false);
     initSel('bw-cf-element');
     initSel('bw-cf-ephemera');
+    initModalOcr(wrap);
   }
 
   const modal = document.getElementById('bw-auc-create-modal');
@@ -1379,6 +1713,8 @@ async function switchType(t) {
   document.querySelectorAll('.bw-auc-online-pill').forEach(function(b) {
     b.classList.toggle('active', b.dataset.ostatus === 'all');
   });
+  const ocrZone = document.getElementById('bw-auc-ocr-zone');
+  if (ocrZone) ocrZone.style.display = t === 'riven' ? '' : 'none';
   const damBtn = document.querySelector('.bw-auc-sort-damage');
   if (damBtn) {
     damBtn.style.display = t === 'riven' ? 'none' : '';
@@ -1403,6 +1739,125 @@ async function switchType(t) {
   if (_mode === 'manage') loadMine();
 }
 
+/* ══════════════════════════════════════════════════════
+   OCR 识图（裂罅Mod 专属）
+   ══════════════════════════════════════════════════════ */
+function parseRivenOcr(text) {
+  var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+  var result = { weaponRaw: '', positives: [], negatives: [], rank: null, rerolls: null };
+  var statRe   = /^([+\-])\s*(\d+(?:[.,]\d+)?)\s*%\s*(.{2,})$/;
+  var rankRe   = /段位\s*(\d+)|mod\s*rank\s*[:\s]*(\d+)/i;
+  var rerollRe = /[↺]\s*(\d+)|循环\s*(\d+)|re.?rolls?\s*[:\s]*(\d+)/i;
+  var weaponFound = false;
+  lines.forEach(function(line) {
+    var sm = line.match(statRe);
+    if (sm) {
+      var positive = sm[1] === '+';
+      var value = parseFloat(sm[2].replace(',', '.'));
+      var rawName = sm[3].replace(/^[^一-鿿a-zA-Z]+/, '').trim();
+      if (positive) result.positives.push({ rawName: rawName, value: value });
+      else          result.negatives.push({ rawName: rawName, value: value });
+      return;
+    }
+    var rm = line.match(rankRe);
+    if (rm) { result.rank = parseInt(rm[1] || rm[2]); return; }
+    var rrm = line.match(rerollRe);
+    if (rrm) { result.rerolls = parseInt(rrm[1] || rrm[2] || rrm[3]); return; }
+    if (!weaponFound) {
+      var zhM = line.match(/^([一-鿿][一-鿿\s·]*)/);
+      if (zhM) {
+        result.weaponRaw = zhM[1].trim();
+      } else {
+        var words = line.split(/\s+/).filter(Boolean);
+        var nameWords = [];
+        for (var i = 0; i < words.length; i++) {
+          if (words[i].indexOf('-') !== -1) break;
+          nameWords.push(words[i]);
+        }
+        result.weaponRaw = nameWords.join(' ') || words[0] || '';
+      }
+      weaponFound = true;
+    }
+  });
+  return result;
+}
+
+function matchDictEntry(rawName, arr) {
+  var q = rawName.toLowerCase();
+  return arr.find(function(a) {
+    var zh = (a.i18n && a.i18n['zh-hans'] && a.i18n['zh-hans'].name) || '';
+    var en = (a.i18n && a.i18n.en && a.i18n.en.name) || '';
+    return zh.indexOf(rawName) !== -1 || rawName.indexOf(zh) !== -1
+        || en.toLowerCase().indexOf(q) !== -1 || q.indexOf(en.toLowerCase()) !== -1;
+  });
+}
+
+function setAcValue(id, slug, name) {
+  var input = document.getElementById(id);
+  if (!input) return;
+  input.dataset.slug = slug;
+  input.value = name;
+}
+
+function applyOcrToFilters(parsed) {
+  var weaponArr = _dictArr[_aType + '/weapons'] || [];
+  var attrArr   = _dictArr['riven/attributes']  || [];
+  var summary   = [];
+
+  if (parsed.weaponRaw) {
+    var wMatch = matchDictEntry(parsed.weaponRaw, weaponArr);
+    if (wMatch) {
+      setAcValue('bw-auc-weapon', wMatch.slug, i18nName(wMatch));
+      summary.push('武器：' + i18nName(wMatch) + '（OCR: ' + parsed.weaponRaw + '）');
+    } else {
+      summary.push('武器：未匹配「' + parsed.weaponRaw + '」');
+    }
+  }
+
+  var posIds = ['bw-auc-pos1', 'bw-auc-pos2', 'bw-auc-pos3'];
+  parsed.positives.forEach(function(attr, i) {
+    if (i >= posIds.length) return;
+    var m = matchDictEntry(attr.rawName, attrArr);
+    if (m) {
+      setAcValue(posIds[i], m.slug, i18nName(m));
+      summary.push('+ ' + i18nName(m) + ' ' + attr.value + '%');
+    } else {
+      summary.push('+ 未匹配「' + attr.rawName + '」');
+    }
+  });
+
+  if (parsed.negatives[0]) {
+    var neg = parsed.negatives[0];
+    var nm = matchDictEntry(neg.rawName, attrArr);
+    if (nm) {
+      setAcValue('bw-auc-neg', nm.slug, i18nName(nm));
+      summary.push('- ' + i18nName(nm) + ' ' + neg.value + '%');
+    } else {
+      summary.push('- 未匹配「' + neg.rawName + '」');
+    }
+  }
+
+  if (parsed.rank    != null) summary.push('段位 ' + parsed.rank);
+  if (parsed.rerolls != null) summary.push('循环 ' + parsed.rerolls);
+
+  var resultEl = document.getElementById('bw-auc-ocr-result');
+  if (resultEl) {
+    resultEl.innerHTML = summary.map(function(l) { return _escHtml(l); }).join('<br>');
+    resultEl.classList.add('is-visible');
+  }
+}
+
+function initOcrZone() {
+  var dropEl  = document.getElementById('bw-auc-ocr-drop');
+  var stripEl = document.getElementById('bw-auc-ocr-strip');
+  if (!dropEl || !stripEl) return;
+  initScreenshotIntake({
+    dropEl: dropEl, stripEl: stripEl, autoStart: true,
+    onStatus: function(txt) { setStatus(txt || ''); },
+    onTextRecognized: function(text) { setStatus(''); applyOcrToFilters(parseRivenOcr(text)); },
+    onError: function(err) { setStatus('识图失败：' + (err.message || err)); },
+  });
+}
 
 /* ── 主入口 ── */
 async function main() {
@@ -1434,6 +1889,7 @@ async function main() {
   bindSortControl();
   bindOnlineFilter();
   bindMineManage();
+  initOcrZone();
   await switchType('riven');
 }
 

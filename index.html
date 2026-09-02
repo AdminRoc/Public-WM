@@ -32,9 +32,9 @@
       <span class="bw-nav-slash" aria-hidden="true"></span>
       <a href="https://item.wfspeed.run"        target="_blank" rel="noopener" class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">物品查询</span></a>
       <span class="bw-nav-slash" aria-hidden="true"></span>
-      <a href="https://relic.wfspeed.run"            target="_blank" rel="noopener" class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">核桃溯源</span></a>
+      <a href="https://relic.wfspeed.run" target="_blank" rel="noopener" class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">核桃溯源</span></a>
       <span class="bw-nav-slash" aria-hidden="true"></span>
-      <a href="https://wenxin.baidu.com/?enter_type=chat_site" target="_blank" rel="noopener" class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">人工智能</span></a>
+      <a href="/quant"                                                        class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">量化操作</span></a>
       <span class="bw-nav-slash" aria-hidden="true"></span>
       <a href="/auctions"                                                     class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">拍卖功能</span></a>
       <span class="bw-nav-slash" aria-hidden="true"></span>
@@ -58,9 +58,9 @@
       <a href="https://world.wfspeed.run" target="_blank" rel="noopener" class="bw-drawer-link">世界状态</a>
       <a href="https://eelog.wfspeed.run"      target="_blank" rel="noopener" class="bw-drawer-link">日志分析</a>
       <a href="https://item.wfspeed.run"        target="_blank" rel="noopener" class="bw-drawer-link">物品查询</a>
-      <a href="https://relic.wfspeed.run"            target="_blank" rel="noopener" class="bw-drawer-link">核桃溯源</a>
-      <a href="https://wenxin.baidu.com/?enter_type=chat_site" target="_blank" rel="noopener" class="bw-drawer-link">人工智能</a>
       <div class="bw-drawer-sep"></div>
+      <a href="https://relic.wfspeed.run" target="_blank" rel="noopener" class="bw-drawer-link">核桃溯源</a>
+      <a href="/quant"      class="bw-drawer-link">量化操作</a>
       <a href="/auctions"   class="bw-drawer-link">拍卖功能</a>
     </div>
     <div class="bw-drawer-logout">
@@ -240,8 +240,53 @@
         </div>
       </div>
 
-      <!-- 批量操作面板（默认隐藏：仅当批量操作激活时由 shared.js 动态显示，空闲整体缩回） -->
-      <div class="bw-batch-panel" id="bw-batch-panel" style="display:none">
+      <!-- 批量操作面板（始终显示） -->
+      <div class="bw-batch-panel" id="bw-batch-panel">
+        <div class="bw-batch-header">
+          <span class="bw-batch-title">批量编辑</span>
+          <span class="bw-batch-count-label">当前筛选 <strong id="bw-batch-count">0</strong> 条 · <span id="bw-batch-type-label" class="bw-batch-type-tag">全部</span></span>
+          <div class="bw-batch-type-pills" title="批量操作范围">
+            <button class="bw-batch-type-pill active" data-bt="all">全部</button>
+            <button class="bw-batch-type-pill" data-bt="sell">出售</button>
+            <button class="bw-batch-type-pill" data-bt="buy">求购</button>
+          </div>
+        </div>
+        <div class="bw-batch-controls">
+          <div class="bw-batch-item">
+            <label class="bw-batch-field-label">设定价格</label>
+            <div class="bw-batch-input-row">
+              <input type="number" id="bw-batch-price" class="bw-batch-input" placeholder="白金" min="1">
+              <span class="bw-batch-unit">p</span>
+              <button class="bw-batch-btn" id="bw-batch-price-btn">应用</button>
+            </div>
+          </div>
+          <div class="bw-batch-item">
+            <label class="bw-batch-field-label">设定数量</label>
+            <div class="bw-batch-input-row">
+              <input type="number" id="bw-batch-qty" class="bw-batch-input" placeholder="数量" min="1">
+              <button class="bw-batch-btn" id="bw-batch-qty-btn">应用</button>
+            </div>
+          </div>
+          <div class="bw-batch-item bw-batch-item-accent">
+            <label class="bw-batch-field-label">均价 × 倍率</label>
+            <div class="bw-batch-input-row">
+              <input type="number" id="bw-batch-mult-input" class="bw-batch-input" placeholder="倍率" min="0.1" step="0.1" value="1">
+              <span class="bw-batch-unit">×</span>
+              <button class="bw-batch-btn bw-batch-btn-accent" id="bw-batch-mult-btn">批量应用</button>
+            </div>
+            <div class="bw-round-pills" id="bw-round-pills" title="计算出的目标价再向上取整（例 32 × 精确 → 35 / 精确×10 → 40）">
+              <button class="bw-round-pill active" data-round="none">精确</button>
+              <button class="bw-round-pill" data-round="5">精确×5</button>
+              <button class="bw-round-pill" data-round="10">精确×10</button>
+            </div>
+          </div>
+          <div class="bw-batch-item">
+            <label class="bw-batch-field-label">原价刷新订单</label>
+            <div class="bw-batch-input-row">
+              <button class="bw-batch-btn" id="bw-batch-refresh-btn" title="不改变价格/数量/可见性，仅刷新当前筛选订单的更新时间">原价刷新</button>
+            </div>
+          </div>
+        </div>
         <div class="bw-batch-progress" id="bw-batch-progress" style="display:none">
           <div class="bw-batch-bar-wrap">
             <div class="bw-batch-bar" id="bw-batch-bar"></div>
@@ -488,5 +533,39 @@
   <script src="js/shared.js"></script>
   <script src="js/price-key.js"></script>
   <script src="js/main.js"></script>
+<!-- 重要提醒 — 暗红大型居中弹窗（登录页/主页共用） -->
+<div class="bw-important-overlay" id="bw-important-overlay" aria-hidden="true">
+  <div class="bw-important-box" role="dialog" aria-modal="true" aria-labelledby="bw-important-title">
+    <span class="bw-c bw-c-tl"></span><span class="bw-c bw-c-tr"></span>
+    <span class="bw-c bw-c-bl"></span><span class="bw-c bw-c-br"></span>
+    <button class="bw-important-x" id="bw-important-x" aria-label="关闭">×</button>
+    <div class="bw-important-icon">!</div>
+    <div class="bw-important-title" id="bw-important-title">重要提醒</div>
+    <div class="bw-important-msg">
+      <p>请大家注意，WM目前居然给<span class="bw-important-hl">【切换在线状态】</span>也加了一个验证机制，导致本站已无法在站内进行<span class="bw-important-hl">【维持/改动 在线状态】</span>的操作，但我们决定新增<span class="bw-important-hl">【批量操作】</span>功能，以应对WM的这种逆天改动，以提升大家的使用体验。</p>
+      <p>大家现在可以使用本站的所有批量操作功能，例如<span class="bw-important-hl">【批量改价】</span>、<span class="bw-important-hl">【批量上架】</span>、<span class="bw-important-hl">【批量下架】</span>等功能。虽然本站不能帮助大家稳定维持WM的在线状态了，但同样希望可以通过这些批量操作，让大家的交易之旅更加方便。</p>
+    </div>
+    <button class="bw-important-close" id="bw-important-close">我知道了</button>
+  </div>
+</div>
+<script>
+(function(){
+  var overlay = document.getElementById('bw-important-overlay');
+  if(!overlay) return;
+  function open(){ overlay.classList.add('show'); overlay.setAttribute('aria-hidden','false'); document.body.style.overflow='hidden'; }
+  function close(){ overlay.classList.remove('show'); overlay.setAttribute('aria-hidden','true'); document.body.style.overflow=''; }
+  var btn = document.getElementById('bw-important-close');
+  var xbtn = document.getElementById('bw-important-x');
+  if(btn) btn.addEventListener('click', close);
+  if(xbtn) xbtn.addEventListener('click', close);
+  overlay.addEventListener('click', function(e){ if(e.target===overlay) close(); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape' && overlay.classList.contains('show')) close(); });
+  function tryOpen(){ open(); }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(tryOpen, 1400); });
+  } else { setTimeout(tryOpen, 1400); }
+})();
+</script>
+
 </body>
 </html>

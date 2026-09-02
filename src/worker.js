@@ -1,10 +1,10 @@
 /* Public-WM —— Warframe.market 交易工具（公版）Worker 入口
  *
- * 这玩意是 Private-WM（CSC·Alliance 的 Boss Tool）的公开阉割版，去掉的东西：
+ * 这玩意是 Private-WM（CSC·Alliance 的 Boss Tool）的公开版（已补回 Private 批量、量化等，保留无状态会话与 PWM_KV）：
  *   - 全部 KV（白名单 / 会话 / JWT 池 / 镜像登录）
  *   - 自动化批量（Cron 定时、GitHub Actions 均价流水线）
  *   - 吃内存的页面（量化、中英互译、OCR）
- * 剩下正常 WM 功能：登录、订单、物品总表、均价、拍卖、在线状态。
+ * 保留：登录、订单、物品总表、均价、拍卖、在线状态、批量、量化。
  *
  * 认证是无状态的：用户拿自己的 WM 账号登录（或者贴 JWT），Worker 代做 signin，
  * 把 WM JWT 塞进 HttpOnly Cookie（bw_session），后面的请求就靠 cookie 里的 JWT
@@ -537,6 +537,75 @@ async function handleWmOrderPatch(request, orderId) {
 }
 
 // DELETE /api/wm/orders/:id
+async function handleWmOrdersBatch(request) {
+  const wmJwt = getWmJwt(request);
+  if (!wmJwt) return jsonResponse({ error: '请先登录' }, 401);
+  let body;
+  try { body = await request.json(); } catch { return jsonResponse({ error: '请求格式错误' }, 400); }
+  const patches = Array.isArray(body.patches) ? body.patches : [];
+  const deletes = Array.isArray(body.deletes) ? body.deletes : [];
+  const creates = Array.isArray(body.creates) ? body.creates : [];
+  if (Array.isArray(body.ops)) {
+    for (const o of body.ops) {
+      if (o && o.method === 'DELETE' && o.id) deletes.push(o.id);
+      else if (o && o.method === 'POST' && o.body) creates.push(o.body);
+      else if (o && o.id && o.patch) patches.push({ id: o.id, patch: o.patch });
+      else if (o && o.id && o.body) patches.push({ id: o.id, patch: o.body });
+    }
+  }
+  const total = patches.length + deletes.length + creates.length;
+  if (!total) return jsonResponse({ error: '空批量' }, 400);
+  if (total > 300) return jsonResponse({ error: '批量上限300' }, 400);
+  function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+  const results = [];
+  const fails = [];
+  const delay = total > 120 ? 150 : 260;
+  for (const p of patches) {
+    const id = String(p.id||'').trim(); const patch = p.patch || p.body;
+    if (!id || !patch) { fails.push({ id, error:'参数缺失' }); continue; }
+    let lastErr=null;
+    for (let attempt=0; attempt<=2; attempt++){
+      try{
+        const resp = await wmFetch(wmJwt, '/v2/order/' + id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(patch) });
+        const txt = await resp.text();
+        if (resp.ok) { results.push({ id, ok:true }); lastErr=null; break; }
+        let msg=txt; try{ const j=JSON.parse(txt); msg=j.error?JSON.stringify(j.error):txt; }catch{}
+        if (resp.status===429 || resp.status>=500) { lastErr=new Error(msg||('WM '+resp.status)); if(attempt<2) { await sleep(1500*(attempt+1)); continue; } }
+        lastErr=new Error(msg); break;
+      }catch(e){ lastErr=e; if(attempt<2 && /429|502|503|504|network|timeout|failed to fetch/i.test(e.message||'')) { await sleep(1500*(attempt+1)); continue; } break; }
+    }
+    if(lastErr) fails.push({ id, error: lastErr.message||String(lastErr) });
+    if(delay) await sleep(delay);
+  }
+  for (const idRaw of deletes) {
+    const id=String(idRaw).trim(); if(!id){ fails.push({id,error:'参数缺失'}); continue; }
+    let lastErr=null;
+    for(let attempt=0; attempt<=2; attempt++){
+      try{
+        const resp=await wmFetch(wmJwt, '/v2/order/'+id, { method:'DELETE' });
+        if(resp.status===204 || resp.ok){ results.push({id, ok:true}); lastErr=null; break; }
+        const txt=await resp.text(); if(resp.status===429||resp.status>=500){ lastErr=new Error(txt||('WM '+resp.status)); if(attempt<2){ await sleep(1500*(attempt+1)); continue; } } lastErr=new Error(txt); break;
+      }catch(e){ lastErr=e; if(attempt<2 && /429|502|503/i.test(e.message||'')){ await sleep(1500*(attempt+1)); continue; } break; }
+    }
+    if(lastErr) fails.push({id, error:lastErr.message||String(lastErr)});
+    if(delay) await sleep(delay);
+  }
+  for (const b of creates) {
+    let lastErr=null;
+    for(let attempt=0; attempt<=2; attempt++){
+      try{
+        const resp=await wmFetch(wmJwt, '/v2/order', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(b) });
+        const txt=await resp.text();
+        if(resp.ok){ let j={}; try{j=JSON.parse(txt);}catch{}; results.push({ ok:true, data:j.data||j }); lastErr=null; break; }
+        if(resp.status===429||resp.status>=500){ lastErr=new Error(txt||('WM '+resp.status)); if(attempt<2){ await sleep(1500*(attempt+1)); continue; } } lastErr=new Error(txt); break;
+      }catch(e){ lastErr=e; if(attempt<2 && /429|502/i.test(e.message||'')){ await sleep(1500*(attempt+1)); continue; } break; }
+    }
+    if(lastErr) fails.push({ error:lastErr.message||String(lastErr), body:b });
+    if(delay) await sleep(delay);
+  }
+  return jsonResponse({ ok: fails.length===0, results, fails, total });
+}
+
 async function handleWmOrderDelete(request, orderId) {
   const wmJwt = getWmJwt(request);
   if (!wmJwt) return jsonResponse({ error: '请先登录' }, 401);
@@ -980,6 +1049,7 @@ async function handleFetch(request, env) {
     /* 静态代理 */
     if (p === '/api/wm/avatar' && request.method === 'GET') return handleAvatarProxy(request);
 
+    if (p === '/api/wm/orders/batch'  && request.method === 'POST') return handleWmOrdersBatch(request);
     if (p === '/api/wm/orders'        && request.method === 'GET')  return handleWmOrders(request);
     if (p === '/api/wm/orders'        && request.method === 'POST') return handleWmOrderCreate(request);
     /* 单数别名 /api/wm/order（POST=创建，PATCH/DELETE 由下方 match 处理）*/

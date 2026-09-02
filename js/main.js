@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════════════════════════
-   main.js —— CSC·Alliance：Public WM（index.html 专属逻辑）
+   main.js —— CSC·Alliance：Public WM（index.html 专用逻辑）
    依赖 js/shared.js 先加载：API、apiFetch、checkSession、
-   showLogin、ago、sleep、_escHtml、星空/故障背景、批量操作那套
-   （runBatch/showBatchFail/hideBatchFail/retryBatchFailures）都在那边。
+   showLogin、ago、sleep、_escHtml、星空/故障背景特效、批量操作引擎
+   （runBatch/showBatchFail/hideBatchFail/retryBatchFailures）均在那边。
    ═══════════════════════════════════════════════════════════ */
 
 /* ──────────────────────────────────────────────────────────
@@ -17,6 +17,7 @@ let _visF      = 'all';
 let _filterSpecial = false;
 let _filterExtra   = false;
 let _filterAlert   = false;
+let _batchType     = 'all';   // 批量操作类型：all / sell / buy
 let _sort      = 'updated_desc';
 let _priceMin  = 0;
 let _priceMax  = Infinity;
@@ -24,11 +25,12 @@ let _searchQ   = '';
 let _mult      = 1;
 let _avgCache  = {};
 
-/* 滚动增量渲染（虚拟列表的务实做法）：只画前 N 条订单，滚近底部再补一批，
-   DOM 从几千降到几百，3000+ 订单也不卡。筛选/排序/搜索一变就自动重置。 */
+/* 滚动增量渲染（虚拟列表务实实现）：只渲染前 N 条订单，滚近底部时追加一批，
+   DOM 节点从几千降到数百，3000+ 订单不再卡顿。筛选/排序/搜索变化时自动重置。 */
 let _visibleCount = 120;
 const LIST_BATCH   = 120;
 let _lastRenderKey = '';
+let _atBottom = false; // 到底时窗口化渲最后N条，一键到底不堆68k
 function _renderKey() {
   return [_typeF, _visF, _searchQ, _sort, _priceMin, _priceMax,
           _filterSpecial, _filterExtra, _filterAlert, _orders.length].join('|');
@@ -122,42 +124,33 @@ async function refreshItemsAndRerender(btn, alertOnError) {
    加载订单
 ─────────────────────────────────────────────────────────── */
 async function loadOrders() {
-  /* 订单是核心数据：加载失败持续重试直到成功；会话过期（401）等确定性错误不重试 */
   while (true) {
     try {
       const j = await apiFetch('/orders');
       const raw = Array.isArray(j.data) ? j.data : [];
+      // 3000单 O(N*M) find 会卡死，建 Map O(N) — 严格复刻原 find 语义 (url_name||slug||id)
+      const _itemMap = new Map();
+      for (var _mi=0; _mi<_items.length; _mi++) { var _it=_items[_mi]; var _k=_it.url_name||_it.slug||_it.id; if(_k) _itemMap.set(_k,_it); }
       _orders = raw.map(function(o) {
-    /* 边缘函数返回精简订单（含 itemId，无内嵌 item 对象）；
-       中文名/缩略图/稀有度等由前端用本地物品表按 itemId 合并 */
-    const itemObj = _items.find(function(i) {
-      if (o.itemId) return i.id === o.itemId;
-      const slug = o.item?.url_name || o.slug || o.item?.id || '';
-      return slug ? (i.url_name || i.slug || i.id) === slug : false;
-    });
-    const slug = itemObj ? (itemObj.url_name || itemObj.slug || itemObj.id)
-                         : (o.item?.url_name || o.slug || o.item?.id || o.itemId || '');
-    /* v2 API 用 camelCase，统一别名到 snake_case 供渲染层使用 */
-    return Object.assign({}, o, {
-      order_type:  o.order_type  || o.orderType  || o.type || 'sell',
-      last_update: o.last_update || o.lastUpdate  || o.updatedAt || '',
-      creation_date: o.creation_date || o.creationDate || o.createdAt || '',
-      /* WM v2 订单字段实测为 rank / perTrade（非 mod_rank / quantity_in_set），做了实测校验，此处按官方字段名兜底 */
-      mod_rank:    o.rank !== undefined ? o.rank : (o.mod_rank !== undefined ? o.mod_rank : (o.modRank !== undefined ? o.modRank : undefined)),
-      quantity_in_set: o.perTrade || o.quantity_in_set || o.quantityInSet || undefined,
-      _slug:  slug,
-      _name:  itemObj?.en || o.item?.en || o.item?.en_name || o.item?.name || slug,
-      _zh:    itemObj?.zh || o.item?.zh || '',
-      _tags:  itemObj?.tags || [],
-      thumb:     o.thumb     || itemObj?.thumb     || null,
-      rarity:    o.rarity    || itemObj?.rarity    || null,
-      tradingTax:o.tradingTax || itemObj?.tradingTax || null,
-      maxRank:   o.maxRank   || itemObj?.maxRank   || null,
-    });
-  });
+        const slug = o.item?.url_name || o.slug || o.item?.id || '';
+        const itemObj = slug ? (_itemMap.get(slug) || null) : null;
+        /* v2 API 用 camelCase，统一别名到 snake_case 供渲染层使用 */
+        return Object.assign({}, o, {
+          order_type:  o.order_type  || o.orderType  || o.type || 'sell',
+          last_update: o.last_update || o.lastUpdate  || o.updatedAt || '',
+          creation_date: o.creation_date || o.creationDate || o.createdAt || '',
+          /* WM v2 订单字段实测为 rank / perTrade（非 mod_rank / quantity_in_set），做了实测校验，此处按官方字段名兜底 */
+          mod_rank:    o.rank !== undefined ? o.rank : (o.mod_rank !== undefined ? o.mod_rank : (o.modRank !== undefined ? o.modRank : undefined)),
+          quantity_in_set: o.perTrade || o.quantity_in_set || o.quantityInSet || undefined,
+          _slug:  slug,
+          _name:  itemObj?.en || o.item?.en || o.item?.en_name || o.item?.name || slug,
+          _zh:    itemObj?.zh || o.item?.zh || '',
+          _tags:  itemObj?.tags || [],
+        });
+      });
       return;
     } catch (e) {
-      /* 会话过期等确定性错误不重试（页面会自动跳登录）；网络/临时错误持续重试 */
+      /* 会话过期等确定性错误不重试（页面会自动跳登录） */
       if (e && e.message && e.message.indexOf('会话已过期') !== -1) throw e;
       const hidden = typeof document !== 'undefined' && document.hidden;
       await sleep(hidden ? 30000 : 2500);
@@ -191,7 +184,7 @@ async function preloadAvgPrices() {
 }
 
 /* ──────────────────────────────────────────────────────────
-   均价获取（队列限速，jsDelivr 静态数据未覆盖的物品经 Worker API 实时计算）
+   均价获取（队列限速，用于静态文件未覆盖的物品）
 ─────────────────────────────────────────────────────────── */
 const _avgQueue = [];
 let _avgRunning = false;
@@ -651,6 +644,11 @@ function filtered() {
   return sortOrders(list);
 }
 
+function filteredForBatch() {
+  const base = filtered();
+  if (_batchType === 'all') return base;
+  return base.filter(function(o){ return (o.order_type||o.orderType) === _batchType; });
+}
 
 function sortOrders(list) {
   return list.slice().sort(function(a, b) {
@@ -792,16 +790,14 @@ function bindListDelegation(el) {
    渲染列表
 ─────────────────────────────────────────────────────────── */
 function render() {
-  /* 筛选/排序/搜索等状态变化时重置可见条数（滚动增量渲染） */
   const rk = _renderKey();
-  if (rk !== _lastRenderKey) { _visibleCount = LIST_BATCH; _lastRenderKey = rk; }
+  if (rk !== _lastRenderKey) { _visibleCount = LIST_BATCH; _atBottom=false; _lastRenderKey = rk; }
 
   const list     = filtered();
-  /* 全量用于计数，slice 后仅用于渲染（虚拟列表） */
   const sellAll  = list.filter(function(o) { return (o.order_type || o.orderType) === 'sell'; });
   const buyAll   = list.filter(function(o) { return (o.order_type || o.orderType) !== 'sell'; });
-  const sellList = sellAll.slice(0, _visibleCount);
-  const buyList  = buyAll.slice(0, _visibleCount);
+  const sellList = _atBottom ? sellAll.slice(-_visibleCount) : sellAll.slice(0, _visibleCount);
+  const buyList  = _atBottom ? buyAll.slice(-_visibleCount) : buyAll.slice(0, _visibleCount);
 
   const sellEl = document.getElementById('bw-sell-list');
   const buyEl  = document.getElementById('bw-buy-list');
@@ -884,6 +880,12 @@ function render() {
     ? alertCnt + ' 条订单价格低于均价'
     : '所有订单价格正常';
 
+  document.getElementById('bw-batch-count').textContent = filteredForBatch().length;
+  const typeTag = document.getElementById('bw-batch-type-label');
+  if (typeTag) {
+    typeTag.textContent = _typeF === 'sell' ? '出售' : _typeF === 'buy' ? '求购' : '全部';
+    typeTag.className   = 'bw-batch-type-tag ' + (_typeF === 'sell' ? 'is-sell' : _typeF === 'buy' ? 'is-buy' : '');
+  }
 
   /* 扫光动画：有稀缺/警报数据时激活 */
   const allOrders = _orders;
@@ -905,13 +907,17 @@ function loadMissingAvg(list) {
   list.forEach(function(o) {
     if (o._slug && !_avgCache[o._slug] && !seen[o._slug]) { seen[o._slug]=1; slugs.push(o._slug); }
   });
-  slugs.forEach(function(slug) {
+  if (!slugs.length) return;
+  // 去重后分片串行，避免 3000单瞬间并发
+  var orderMap=new Map(_orders.map(function(x){return [x.id,x];}));
+  var idx=0;
+  function next(){
+    if(idx>=slugs.length) return;
+    var slug=slugs[idx++];
     fetchAvg(slug).then(function(data) {
-      if (!data) return;
-      /* 同一物品的不同订单可能等级不同（比如一把0级+一把满级的裂罅Mod），
-         必须按每一行自己的订单等级各自取值，不能整批套用同一个数字 */
+      if (!data) { setTimeout(next, 0); return; }
       document.querySelectorAll('.bw-order-row[data-slug="' + slug + '"]').forEach(function(row) {
-        const o = _orders.find(function(x) { return x.id === row.dataset.id; });
+        const o = orderMap.get(row.dataset.id);
         const c = _rankAvg(data, o && o.mod_rank);
         const badge = row.querySelector('.bw-avg-badge');
         if (badge) {
@@ -931,8 +937,10 @@ function loadMissingAvg(list) {
         if (o && !_isSpecialAvg(c) && (o.order_type||o.orderType||o.type||'sell') === 'sell' && o.platinum < c.avg) row.classList.add('bw-alert-row');
       });
       updateAlertBadges();
-    });
-  });
+      setTimeout(next, 0);
+    }).catch(function(){ setTimeout(next,0); });
+  }
+  next();
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -1225,6 +1233,32 @@ function updateCreateFields(item) {
    runBatch()，这里只负责把"PATCH 一个订单"包成 runBatch 认识的 workFn。
 ─────────────────────────────────────────────────────────── */
 async function batchOp(orders, patchFn) {
+  // 计算 patches
+  var patches = [];
+  orders.forEach(function(o){ var p=patchFn(o); if(p) patches.push({ id:o.id, patch:p }); });
+  if (!patches.length) return;
+  // 优先 batch 1次鉴权（200单=1 KV读），失败回退单条
+  try {
+    var res = await apiFetch('/orders/batch', { method:'POST', body: JSON.stringify({ patches }) });
+    var okSet = new Set((res.results||[]).map(function(r){return r.id;}));
+    patches.forEach(function(pr){ if(okSet.has(pr.id)){ var o=orders.find(function(x){return x.id===pr.id;}); if(o) Object.assign(o, pr.patch); } });
+    if (res.fails && res.fails.length) {
+      var failMap={}; res.fails.forEach(function(f){ failMap[f.id]=f.error; });
+      var failItems = orders.filter(function(o){ return failMap[o.id]; });
+      if (failItems.length) {
+        // 失败项用单条重试，复用现有失败面板
+        await runBatch(failItems, async function(o){ var p=patchFn(o); if(!p) return; await apiFetch('/orders/'+o.id,{method:'PATCH', body:JSON.stringify(p)}); Object.assign(o,p); }, {
+          idPrefix:'bw-batch', onDone: render,
+          getLabel: function(o){ return { type:(o.order_type==='buy')?'求购':'出售', name:o._zh||o._name||o._slug||'(未知物品)' }; }
+        });
+        return;
+      }
+    }
+    render();
+    return;
+  } catch(e){
+    // batch 不可用或整体失败，回退单条
+  }
   await runBatch(orders, async function(o) {
     const patch = patchFn(o);
     if (!patch) return;
@@ -1267,19 +1301,25 @@ function bindEvents() {
       botBtn.classList.toggle('is-disabled', maxY - y < 40);
     }
     topBtn.addEventListener('click', function() {
-      /* 回顶部时恢复轻量渲染，避免大量 DOM 节点残留导致卡顿 */
-      if (_visibleCount > LIST_BATCH) { _visibleCount = LIST_BATCH; render(); }
+      if (_visibleCount > LIST_BATCH || _atBottom) { _visibleCount = LIST_BATCH; _atBottom=false; render(); }
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
     botBtn.addEventListener('click', function() {
-      /* 如果还有未渲染的订单，一次性全部加载再滚到底部，避免逐批追加需要反复点击 */
-      if (_visibleCount < _orders.length) {
-        _visibleCount = _orders.length;
-        render();
+      // 一键到底：首次360，重复点按增量360，窗口化不堆68k，字体尺寸变化后双rAF必达底
+      if (_atBottom) {
+        _visibleCount = Math.min(_orders.length, _visibleCount + 360);
+      } else {
+        _atBottom = true;
+        _visibleCount = Math.min(360, _orders.length);
       }
-      requestAnimationFrame(function() {
-        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+      render();
+      requestAnimationFrame(function(){
+        requestAnimationFrame(function(){
+          window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+          syncState();
+        });
       });
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }); });
     });
     window.addEventListener('scroll', syncState, { passive: true });
     window.addEventListener('resize', syncState);
@@ -1563,6 +1603,75 @@ function bindEvents() {
     } catch(e) { setDrawerMsg(window.bwWmErrorText(e), 'err'); }
   });
 
+  /* 批量操作 */
+  /* 批量计数标签同步（含 batchType 筛选） */
+  function updateBatchCount() {
+    const cnt = document.getElementById('bw-batch-count');
+    if (cnt) cnt.textContent = filteredForBatch().length;
+  }
+
+  /* 批量操作前置检查：0 条时给用户明确提示 */
+  function batchGuard() {
+    const items = filteredForBatch();
+    if (items.length) return items;
+    const txt = document.getElementById('bw-batch-prog-text');
+    const prog = document.getElementById('bw-batch-progress');
+    if (txt && prog) {
+      prog.style.display = '';
+      txt.style.display = ''; txt.style.color = 'var(--c-warn)';
+      txt.textContent = '当前筛选无匹配订单，请检查类型/搜索条件';
+      setTimeout(function() { prog.style.display = 'none'; txt.style.color = ''; txt.style.display = 'none'; }, 3000);
+    }
+    return null;
+  }
+
+  document.getElementById('bw-batch-price-btn')?.addEventListener('click', async function() {
+    const val = +document.getElementById('bw-batch-price').value; if (!val||val<1) return;
+    const items = batchGuard(); if (!items) return;
+    await batchOp(items, function() { return { platinum: val }; });
+  });
+  document.getElementById('bw-batch-qty-btn')?.addEventListener('click', async function() {
+    const val = +document.getElementById('bw-batch-qty').value; if (!val||val<1) return;
+    const items = batchGuard(); if (!items) return;
+    await batchOp(items, function() { return { quantity: val }; });
+  });
+  document.getElementById('bw-batch-mult-btn')?.addEventListener('click', async function() {
+    const multInput = document.getElementById('bw-batch-mult-input');
+    const batchMult = multInput ? (parseFloat(multInput.value) || _mult) : _mult;
+    const items = batchGuard(); if (!items) return;
+    await batchOp(items, function(o) {
+      const c = _rankAvg(_avgCache[o._slug], o.mod_rank);
+      if (!c || c.avg === null || c.avg === undefined) return null;
+      const p = _roundPrice(c.avg * batchMult);
+      return p >= 1 ? { platinum: p } : null;
+    });
+  });
+  document.getElementById('bw-batch-refresh-btn')?.addEventListener('click', async function() {
+    const items = batchGuard(); if (!items) return;
+    /* 原样回填当前值，不做任何改动，仅借"更新"接口刷新订单的更新时间 */
+    await batchOp(items, function(o) {
+      return { platinum: o.platinum, quantity: o.quantity || 1, visible: o.visible !== false };
+    });
+  });
+
+  /* 价格警报 FAB：点击即激活警报筛选 */
+  document.getElementById('bw-alert-fab')?.addEventListener('click', function() {
+    _filterAlert = true;
+    const btn = document.getElementById('bw-filter-alert');
+    if (btn) { btn.dataset.active = '1'; btn.classList.add('active'); }
+    render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  /* 批量操作类型 pills */
+  document.querySelectorAll('.bw-batch-type-pill').forEach(function(pill) {
+    pill.addEventListener('click', function() {
+      document.querySelectorAll('.bw-batch-type-pill').forEach(function(p){ p.classList.remove('active'); });
+      pill.classList.add('active');
+      _batchType = pill.dataset.bt;
+      updateBatchCount();
+    });
+  });
 
   /* 批量失败面板：展开详情 / 一键重试 / 关闭 */
   document.getElementById('bw-batch-fail-toggle')?.addEventListener('click', function() {
@@ -1592,8 +1701,8 @@ async function main() {
   renderProfile(sess);
   bindEvents();
   await loadItems();
-  /* 经 jsDelivr 预载全量均价表：价格提示/稀缺筛选等辅助功能大部分无需再走 Worker；
-     极简模式以带宽为第一目标，直接跳过。 */
+  /* 极简模式以最小化带宽为第一目标：均价数据集只用于价格提示/稀缺筛选这些
+     非核心的辅助功能，直接跳过下载；核心的订单管理与在线状态维持完全不受影响。 */
   if (typeof _isMinimal !== 'function' || !_isMinimal()) preloadAvgPrices();
   try { await loadOrders(); }
   catch(e) {

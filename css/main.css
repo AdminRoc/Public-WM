@@ -1044,6 +1044,141 @@ html[data-fui-theme="minimal"] .bw-notice-close:hover {
   box-shadow: none;
 }
 
+/* ========== 重要提醒 — 暗红大型居中弹窗（登录页 + 主页共用） ========== */
+.bw-important-overlay {
+  position: fixed; inset: 0; z-index: 960;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8,0,0,.62);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  opacity: 0; visibility: hidden;
+  transition: opacity .28s ease, visibility 0s linear .28s;
+  padding: 1rem;
+}
+.bw-important-overlay.show {
+  opacity: 1; visibility: visible;
+  transition: opacity .28s ease, visibility 0s linear 0s;
+}
+.bw-important-box {
+  position: relative;
+  width: 680px; max-width: min(92vw, 680px);
+  max-height: 90vh; overflow-y: auto;
+  background: linear-gradient(160deg, #2a0a0e 0%, #4a0f16 38%, #5e121a 70%, #3d080e 100%);
+  border: 1px solid rgba(255,60,60,.55);
+  box-shadow: 0 0 60px rgba(185,28,28,.5), 0 0 0 1px rgba(255,60,60,.14), 0 18px 48px rgba(0,0,0,.65);
+  padding: 2.6rem 2.4rem 2rem;
+  text-align: center;
+  transform: scale(.88) translateY(18px); opacity: 0;
+  transition: transform .36s cubic-bezier(.22,.68,0,1.18), opacity .26s ease;
+  scrollbar-width: thin; scrollbar-color: rgba(255,80,80,.35) transparent;
+}
+.bw-important-overlay.show .bw-important-box {
+  transform: scale(1) translateY(0); opacity: 1;
+}
+.bw-important-box::-webkit-scrollbar { width: 6px; }
+.bw-important-box::-webkit-scrollbar-thumb { background: rgba(255,80,80,.35); border-radius: 999px; }
+/* 顶部暗红高光 */
+.bw-important-box::before {
+  content: '';
+  position: absolute; top: 0; left: 8%; right: 8%; height: 2px;
+  background: linear-gradient(90deg, transparent, #ff3b3b 20%, #ff6b6b 50%, #ff3b3b 80%, transparent);
+  box-shadow: 0 0 18px rgba(255,60,60,.75), 0 0 36px rgba(255,60,60,.4);
+}
+/* 四角暗红描边（复用 .bw-c 但覆盖颜色） */
+.bw-important-box .bw-c {
+  border-color: rgba(255,60,60,.7) !important;
+  width: 18px; height: 18px;
+}
+/* 右上角关闭 X */
+.bw-important-x {
+  position: absolute; top: .65rem; right: .7rem;
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,80,80,.35);
+  color: rgba(255,210,210,.9);
+  font-size: 1.35rem; line-height: 1; cursor: pointer;
+  transition: background .18s, border-color .18s, color .18s, box-shadow .18s;
+}
+.bw-important-x:hover {
+  background: rgba(255,60,60,.18);
+  border-color: rgba(255,80,80,.65);
+  color: #fff;
+  box-shadow: 0 0 14px rgba(255,60,60,.45);
+}
+/* 图标 */
+.bw-important-icon {
+  width: 64px; height: 64px; margin: 0 auto 1.1rem;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle, rgba(255,60,60,.22) 0%, rgba(120,12,18,.45) 58%, transparent 72%);
+  border: 1.6px solid rgba(255,60,60,.6);
+  color: #ff4d4d;
+  font-family: var(--f-main, system-ui); font-weight: 900; font-size: 2rem; line-height: 1;
+  text-shadow: 0 0 14px rgba(255,60,60,.7);
+  box-shadow: 0 0 28px rgba(255,60,60,.35), inset 0 0 18px rgba(255,60,60,.12);
+  animation: bwImportantPulse 2.2s ease-in-out infinite;
+}
+@keyframes bwImportantPulse {
+  0%,100% { box-shadow: 0 0 20px rgba(255,60,60,.32), inset 0 0 18px rgba(255,60,60,.12); transform: scale(1); }
+  50%      { box-shadow: 0 0 38px rgba(255,60,60,.58), inset 0 0 22px rgba(255,60,60,.18); transform: scale(1.03); }
+}
+/* 标题 */
+.bw-important-title {
+  font-family: var(--f-main, system-ui); font-weight: 900; font-size: 1.55rem;
+  letter-spacing: .14em;
+  color: #fff5f5;
+  text-shadow: 0 0 18px rgba(255,60,60,.55), 0 0 40px rgba(255,60,60,.25);
+  margin-bottom: 1rem;
+}
+/* 正文 */
+.bw-important-msg {
+  text-align: left;
+  color: #f8d7d7;
+  font-size: .96rem; line-height: 1.85;
+  word-break: break-word;
+}
+.bw-important-msg p { margin: 0 0 .9em; }
+.bw-important-msg p:last-child { margin-bottom: 0; }
+/* 高亮关键词 */
+.bw-important-hl {
+  color: #fff;
+  font-weight: 800;
+  background: linear-gradient(180deg, rgba(255,60,60,.22), rgba(255,60,60,.12));
+  border: 1px solid rgba(255,110,110,.32);
+  padding: .04em .38em;
+  border-radius: 3px;
+  white-space: nowrap;
+  text-shadow: 0 0 8px rgba(255,60,60,.5);
+}
+/* 底部按钮 */
+.bw-important-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-top: 1.7rem; min-width: 168px; padding: .72rem 1.6rem;
+  font-family: var(--f-main, system-ui); font-size: .92rem; font-weight: 800;
+  letter-spacing: .14em; cursor: pointer;
+  background: linear-gradient(135deg, #b91c1c 0%, #7f0f17 100%);
+  border: 1px solid #ff4d4d;
+  color: #fff;
+  box-shadow: 0 0 0 rgba(255,60,60,0);
+  transition: box-shadow .2s ease, filter .2s ease, transform .12s ease, background .2s ease;
+}
+.bw-important-close:hover {
+  background: linear-gradient(135deg, #d42222 0%, #99131e 100%);
+  box-shadow: 0 0 22px rgba(255,60,60,.55), 0 0 48px rgba(255,60,60,.28);
+  filter: brightness(1.08);
+}
+.bw-important-close:active { transform: scale(.98); }
+
+@media (max-width: 520px) {
+  .bw-important-box { padding: 2rem 1.3rem 1.6rem; width: 96vw; max-width: 96vw; }
+  .bw-important-title { font-size: 1.3rem; letter-spacing: .1em; }
+  .bw-important-msg { font-size: .9rem; line-height: 1.75; }
+  .bw-important-icon { width: 56px; height: 56px; font-size: 1.7rem; }
+  .bw-important-close { min-width: 140px; width: 100%; }
+}
+
+
+
 /* ─── 巨型 Warframe 徽标呼吸背景 ─── */
 .bw-wf-bg {
   position: fixed; inset: 0; z-index: 1; pointer-events: none;
