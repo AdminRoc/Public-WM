@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>CSC路Alliance锛歅ublic WM</title>
+  <title>CSC·Alliance：Public WM</title>
   <link rel="icon" type="image/png" href="picture/websitelogo.png">
   <style>body{opacity:0}</style>
   <link rel="stylesheet" href="css/main.css">
@@ -11,70 +11,67 @@
   <link rel="preload" href="/js/price-key.js" as="script">
   <link rel="preload" href="/api/kv?key=wm_items_json" as="fetch">
   <link rel="preload" href="/api/kv?key=avg_prices_full_json" as="fetch">
-  <link rel="preconnect" href="https://pwm-api.wfspeed.run" crossorigin>
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin>
   <script src="js/fui-core.js"></script>
 </head>
 <body>
   <canvas id="star-canvas"></canvas>
   <div class="nebula-bg"></div>
 
-  <!-- 椤堕儴 Header锛歭ogo + 6 瀵艰埅 + 鐧诲嚭锛屽叡 8 绛夊垎鍖哄潡锛? 鏉℃殫閲戞枩绾垮垎鍓?-->
+  <!-- 顶部 Header：logo + 6 导航 + 登出，共 8 等分区块，7 条暗金斜线分割 -->
   <header class="bw-header">
     <div class="bw-header-row">
-      <a href="/" class="bw-htab bw-brand" title="杩斿洖涓婚〉"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span>
+      <a href="/" class="bw-htab bw-brand" title="返回主页"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span>
         <img src="picture/WS-logo-2.png" class="bw-brand-logo-img" alt="WS">
         <div class="bw-brand-text">
-          <span class="bw-brand-cn">CSC路Alliance</span>
+          <span class="bw-brand-cn">CSC·Alliance</span>
           <span class="bw-brand-sub">PUBLIC <span class="bw-brand-wm">WM</span></span>
         </div>
-        <span class="bw-brand-hover-label">閲嶈繑涓婚〉</span>
+        <span class="bw-brand-hover-label">重返主页</span>
       </a>
       <span class="bw-nav-slash" aria-hidden="true"></span>
-      <a href="https://world.wfspeed.run" target="_blank" rel="noopener" class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">涓栫晫鐘舵€?/span></a>
+      <a href="https://world.wfspeed.run" target="_blank" rel="noopener" class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">世界状态</span></a>
       <span class="bw-nav-slash" aria-hidden="true"></span>
-      <a href="https://eelog.wfspeed.run"      target="_blank" rel="noopener" class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">鏃ュ織鍒嗘瀽</span></a>
+      <a href="https://eelog.wfspeed.run"      target="_blank" rel="noopener" class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">日志分析</span></a>
       <span class="bw-nav-slash" aria-hidden="true"></span>
-      <a href="https://item.wfspeed.run"        target="_blank" rel="noopener" class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">鐗╁搧鏌ヨ</span></a>
+      <a href="https://item.wfspeed.run"        target="_blank" rel="noopener" class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">物品查询</span></a>
       <span class="bw-nav-slash" aria-hidden="true"></span>
-      <a href="https://relic.wfspeed.run" target="_blank" rel="noopener" class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">鏍告婧簮</span></a>
+      <a href="https://relic.wfspeed.run" target="_blank" rel="noopener" class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">核桃溯源</span></a>
       <span class="bw-nav-slash" aria-hidden="true"></span>
-      <a href="/quant"                                                        class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">閲忓寲鎿嶄綔</span></a>
+      <a href="/quant"                                                        class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">量化操作</span></a>
       <span class="bw-nav-slash" aria-hidden="true"></span>
-      <a href="/auctions"                                                     class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">鎷嶅崠鍔熻兘</span></a>
+      <a href="/auctions"                                                     class="bw-htab bw-nav-link"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">拍卖功能</span></a>
       <span class="bw-nav-slash" aria-hidden="true"></span>
-      <button class="bw-htab bw-nav-link" id="bw-logout-btn" title="閫€鍑虹櫥褰?><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">鐧诲嚭璐﹀彿</span></button>
-      <!-- 姹夊牎鎸夐挳锛氫粎绉诲姩绔彲瑙?-->
-      <button class="bw-hamburger" id="bw-hamburger" aria-label="瀵艰埅鑿滃崟" aria-expanded="false">
+      <button class="bw-htab bw-nav-link" id="bw-logout-btn" title="退出登录"><span class="bw-tab-fill"></span><span class="bw-nav-shine"></span><span class="bw-nav-label">登出账号</span></button>
+      <!-- 汉堡按钮：仅移动端可见 -->
+      <button class="bw-hamburger" id="bw-hamburger" aria-label="导航菜单" aria-expanded="false">
         <span class="bw-tab-fill"></span>
         <span class="bw-hamburger-icon"><span></span><span></span><span></span></span>
       </button>
     </div>
   </header>
-  <!-- 绉诲姩绔娊灞夊鑸?-->
+  <!-- 移动端抽屉导航 -->
   <div class="bw-drawer-overlay" id="bw-drawer-overlay" aria-hidden="true"></div>
-  <nav class="bw-drawer" id="bw-drawer" aria-label="绉诲姩绔鑸?>
+  <nav class="bw-drawer" id="bw-drawer" aria-label="移动端导航">
     <div class="bw-drawer-head">
       <img src="picture/WS-logo-2.png" class="bw-drawer-head-logo" alt="WS">
-      <div><span class="bw-drawer-head-cn">CSC路Alliance</span><span class="bw-drawer-head-sub">PUBLIC <span class="bw-brand-wm">WM</span></span></div>
+      <div><span class="bw-drawer-head-cn">CSC·Alliance</span><span class="bw-drawer-head-sub">PUBLIC <span class="bw-brand-wm">WM</span></span></div>
     </div>
     <div class="bw-drawer-nav">
-      <a href="/"    class="bw-drawer-link is-current">涓婚〉</a>
-      <a href="https://world.wfspeed.run" target="_blank" rel="noopener" class="bw-drawer-link">涓栫晫鐘舵€?/a>
-      <a href="https://eelog.wfspeed.run"      target="_blank" rel="noopener" class="bw-drawer-link">鏃ュ織鍒嗘瀽</a>
-      <a href="https://item.wfspeed.run"        target="_blank" rel="noopener" class="bw-drawer-link">鐗╁搧鏌ヨ</a>
+      <a href="/"    class="bw-drawer-link is-current">主页</a>
+      <a href="https://world.wfspeed.run" target="_blank" rel="noopener" class="bw-drawer-link">世界状态</a>
+      <a href="https://eelog.wfspeed.run"      target="_blank" rel="noopener" class="bw-drawer-link">日志分析</a>
+      <a href="https://item.wfspeed.run"        target="_blank" rel="noopener" class="bw-drawer-link">物品查询</a>
       <div class="bw-drawer-sep"></div>
-      <a href="https://relic.wfspeed.run" target="_blank" rel="noopener" class="bw-drawer-link">鏍告婧簮</a>
-      <a href="/quant"      class="bw-drawer-link">閲忓寲鎿嶄綔</a>
-      <a href="/auctions"   class="bw-drawer-link">鎷嶅崠鍔熻兘</a>
+      <a href="https://relic.wfspeed.run" target="_blank" rel="noopener" class="bw-drawer-link">核桃溯源</a>
+      <a href="/quant"      class="bw-drawer-link">量化操作</a>
+      <a href="/auctions"   class="bw-drawer-link">拍卖功能</a>
     </div>
     <div class="bw-drawer-logout">
-      <button class="bw-drawer-logout-btn" id="bw-drawer-logout-btn">鐧诲嚭璐﹀彿</button>
+      <button class="bw-drawer-logout-btn" id="bw-drawer-logout-btn">登出账号</button>
     </div>
   </nav>
 
-  <!-- 鐧诲嚭浜屾纭寮圭獥 -->
+  <!-- 登出二次确认弹窗 -->
   <div class="bw-confirm-overlay" id="bw-logout-confirm" aria-hidden="true">
     <div class="bw-confirm-box">
       <span class="bw-c bw-c-tl"></span><span class="bw-c bw-c-tr"></span>
@@ -86,44 +83,44 @@
           <line x1="21" y1="12" x2="9" y2="12"/>
         </svg>
       </div>
-      <div class="bw-confirm-title">纭鐧诲嚭璐﹀彿锛?/div>
-      <div class="bw-confirm-sub">鐧诲嚭鍚庨渶閲嶆柊杈撳叆閭涓庡彛浠ら獙璇佽韩浠?/div>
+      <div class="bw-confirm-title">确认登出账号？</div>
+      <div class="bw-confirm-sub">登出后需重新输入邮箱与口令验证身份</div>
       <div class="bw-confirm-actions">
-        <button class="bw-confirm-btn bw-confirm-cancel" id="bw-confirm-cancel">鍙栨秷</button>
-        <button class="bw-confirm-btn bw-confirm-ok" id="bw-confirm-ok">纭鐧诲嚭</button>
+        <button class="bw-confirm-btn bw-confirm-cancel" id="bw-confirm-cancel">取消</button>
+        <button class="bw-confirm-btn bw-confirm-ok" id="bw-confirm-ok">确认登出</button>
       </div>
     </div>
   </div>
 
-  <!-- 宸ㄥ瀷 Warframe 寰芥爣鍛煎惛鑳屾櫙 -->
+  <!-- 巨型 Warframe 徽标呼吸背景 -->
   <div class="bw-wf-bg" aria-hidden="true"><img src="picture/warframe-logo-blue-black.svg" alt=""></div>
 
-  <!-- 绫诲瀷绛涢€夊緞鍚戣彍鍗曪細涓績澶ф寜閽睍寮€涓€鍦堝彲澶嶉€夌殑 tag 鑺辩摚锛屽眳涓浐瀹氬崰灞?75%锛?
-       鑳屾櫙妯＄硦锛屽昂瀵哥敤 vw/vh锛堜笉闅忕珯鍐呭瓧鍙风缉鏀惧姛鑳介敊浣嶏級銆傝姳鐡ｇ敱 main.js 鍔ㄦ€佺敓鎴愩€?
-       蹇呴』鏀惧湪 main锛坧age-wrap锛夊闈⑩€斺€攑age-wrap 鐨?opacity:.95 浼氳瀹冨彉鎴?
-       鍐呴儴 position:fixed 鍏冪礌鐨?containing block锛堜笉鍐嶆槸鐪熸瑙嗗彛锛夛紝
-       涔嬪墠鎷嶅崠寮圭獥琚悶鎺夊氨鏄悓涓€涓潙锛岃繖閲屼笉鑳藉啀韪╀竴娆°€?-->
+  <!-- 类型筛选径向菜单：中心大按钮展开一圈可复选的 tag 花瓣，居中固定占屏 75%，
+       背景模糊，尺寸用 vw/vh（不随站内字号缩放功能错位）。花瓣由 main.js 动态生成。
+       必须放在 main（page-wrap）外面——page-wrap 的 opacity:.95 会让它变成
+       内部 position:fixed 元素的 containing block（不再是真正视口），
+       之前拍卖弹窗被吞掉就是同一个坑，这里不能再踩一次。 -->
   <div class="bw-radial-overlay" id="bw-radial-overlay" aria-hidden="true">
     <div class="bw-radial-menu" id="bw-radial-menu">
-      <button class="bw-radial-center" id="bw-radial-center-btn" title="纭绛涢€?>
-        <img src="picture/WS-logo-2.png" alt="纭">
+      <button class="bw-radial-center" id="bw-radial-center-btn" title="确认筛选">
+        <img src="picture/WS-logo-2.png" alt="确认">
       </button>
     </div>
   </div>
 
-  <!-- 绫诲瀷绛涢€夛細鎵嬫満绔笅鎷夊閫夐潰鏉挎湰浣擄紝鍚屾牱鍥犱负 page-wrap 鐨?opacity:.95
-       涓嶈兘鏀惧湪 <main> 閲岄潰锛堜細瀵艰嚧 position:fixed 瀹氫綅鍩哄噯閿欒銆侀潰鏉胯椤跺嚭灞忓箷锛夈€?
-       瑙﹀彂鎸夐挳浠嶅湪宸ュ叿鏍忓師浣嶏紝杩欓噷鍙斁灞曞紑鍚庣殑闈㈡澘銆?-->
+  <!-- 类型筛选：手机端下拉复选面板本体，同样因为 page-wrap 的 opacity:.95
+       不能放在 <main> 里面（会导致 position:fixed 定位基准错误、面板被顶出屏幕）。
+       触发按钮仍在工具栏原位，这里只放展开后的面板。 -->
   <div class="bw-type-dd-panel" id="bw-type-dd-panel" aria-hidden="true">
     <div class="bw-type-dd-list" id="bw-type-dd-list"></div>
     <div class="bw-type-dd-actions">
-      <button class="bw-type-dd-btn" id="bw-type-dd-clear" type="button">娓呯┖</button>
-      <button class="bw-type-dd-btn bw-type-dd-btn-primary" id="bw-type-dd-apply" type="button">纭畾绛涢€?/button>
+      <button class="bw-type-dd-btn" id="bw-type-dd-clear" type="button">清空</button>
+      <button class="bw-type-dd-btn bw-type-dd-btn-primary" id="bw-type-dd-apply" type="button">确定筛选</button>
     </div>
   </div>
 
   <main class="page-wrap bw-wrap">
-    <!-- 涓汉璧勬枡鍗?-->
+    <!-- 个人资料卡 -->
     <section class="bw-profile-card" id="bw-profile-card">
       <div class="bw-skel-row" style="width:100px;height:100px;border-radius:50%;flex-shrink:0"></div>
       <div class="bw-profile-info" style="flex:1">
@@ -133,56 +130,56 @@
     </section>
 
 
-    <!-- 宸ュ叿鏍?-->
+    <!-- 工具栏 -->
     <div class="bw-toolbar" id="bw-toolbar">
       <div class="bw-toolbar-top">
-        <!-- 鍖哄潡鈶狅細璁㈠崟绛涢€?-->
+        <!-- 区块①：订单筛选 -->
         <div class="bw-tb-group">
-          <span class="bw-tb-group-label">璁㈠崟绛涢€?/span>
+          <span class="bw-tb-group-label">订单筛选</span>
           <div class="bw-tb-group-body">
             <div class="bw-filter-group">
-              <button class="bw-type-pill active" data-type="all">鍏ㄩ儴</button>
-              <button class="bw-type-pill" data-type="sell">鍑哄敭</button>
-              <button class="bw-type-pill" data-type="buy">姹傝喘</button>
+              <button class="bw-type-pill active" data-type="all">全部</button>
+              <button class="bw-type-pill" data-type="sell">出售</button>
+              <button class="bw-type-pill" data-type="buy">求购</button>
             </div>
             <div class="bw-filter-group">
-              <button class="bw-vis-f-btn active" data-vis="all">鍏ㄩ儴</button>
-              <button class="bw-vis-f-btn" data-vis="visible">鏄剧ず涓?/button>
-              <button class="bw-vis-f-btn" data-vis="hidden">宸查殣钘?/button>
+              <button class="bw-vis-f-btn active" data-vis="all">全部</button>
+              <button class="bw-vis-f-btn" data-vis="visible">显示中</button>
+              <button class="bw-vis-f-btn" data-vis="hidden">已隐藏</button>
             </div>
             <div class="bw-price-range">
-              <input type="number" id="bw-price-min" class="bw-range-input" placeholder="鏈€浣庝环" min="0">
-              <span class="bw-range-sep">鈥?/span>
-              <input type="number" id="bw-price-max" class="bw-range-input" placeholder="鏈€楂樹环" min="0">
+              <input type="number" id="bw-price-min" class="bw-range-input" placeholder="最低价" min="0">
+              <span class="bw-range-sep">—</span>
+              <input type="number" id="bw-price-max" class="bw-range-input" placeholder="最高价" min="0">
               <span class="bw-range-unit">p</span>
             </div>
             <div class="bw-search-wrap">
-              <input type="text" id="bw-search-q" class="bw-search-input" placeholder="鎼滅储鐗╁搧鍚嶇О鈥? autocomplete="off">
+              <input type="text" id="bw-search-q" class="bw-search-input" placeholder="搜索物品名称…" autocomplete="off">
             </div>
             <div class="bw-filter-group">
-              <button class="bw-special-f-btn" id="bw-filter-special" data-active="0" title="鏄剧ず绋€缂鸿鍗曪紙鏃犲潎浠锋暟鎹?/ 闄嶇骇鐢ㄤ簡鍦ㄧ嚎鍗栧浠锋牸 / 鏍锋湰鏁颁笉瓒?鏉★級">
-                <span class="bw-f-dot bw-f-dot-rare"></span>绋€缂?
+              <button class="bw-special-f-btn" id="bw-filter-special" data-active="0" title="显示稀缺订单（无均价数据 / 降级用了在线卖家价格 / 样本数不足3条）">
+                <span class="bw-f-dot bw-f-dot-rare"></span>稀缺
               </button>
-              <button class="bw-alert-f-btn" id="bw-filter-alert" data-active="0" title="鏄剧ず浠锋牸鍋忎綆鐨勮鎶ヨ鍗?>
-                <span class="bw-f-dot bw-f-dot-warn"></span>浠锋牸璀︽姤
+              <button class="bw-alert-f-btn" id="bw-filter-alert" data-active="0" title="显示价格偏低的警报订单">
+                <span class="bw-f-dot bw-f-dot-warn"></span>价格警报
               </button>
             </div>
             <div class="bw-filter-group">
-              <button class="bw-extra-f-btn" id="bw-filter-extra" data-active="0" title="鏄剧ず鐗规畩鐗╁搧璁㈠崟锛堥渶瑕侀澶栧瓧娈碉細閬楃墿/瑁傜絽/楸?瀹濈煶/闆曞儚绛夛級">
-                <span class="bw-f-dot bw-f-dot-extra"></span>鐗规畩
+              <button class="bw-extra-f-btn" id="bw-filter-extra" data-active="0" title="显示特殊物品订单（需要额外字段：遗物/裂罅/鱼/宝石/雕像等）">
+                <span class="bw-f-dot bw-f-dot-extra"></span>特殊
               </button>
-              <button class="bw-radial-fab" id="bw-radial-fab" title="鎸夌墿鍝佺被鍨嬬瓫閫?>
+              <button class="bw-radial-fab" id="bw-radial-fab" title="按物品类型筛选">
                 <img src="picture/WS-logo-2.png" class="bw-radial-fab-logo" alt="">
-                <span class="bw-radial-fab-label">绫诲瀷绛涢€?/span>
+                <span class="bw-radial-fab-label">类型筛选</span>
               </button>
-              <!-- 鎵嬫満绔細鑺辩摚寮忓緞鍚戣彍鍗曚笉閫傚悎灏忓睆锛堣姳鐡ｅ銆佹墜鎸囩簿搴︽湁闄愶級锛?
-                   鏀规垚鏅€氱殑涓嬫媺澶嶉€夊垪琛紝鍔熻兘绛変环锛堝悓涓€浠?tag 鏁版嵁銆佸悓涓€濂楀閫夌姸鎬侊級銆?
-                   闈㈡澘鏈綋锛?bw-type-dd-panel锛夋尓鍒颁笅鏂?<main> 澶栭潰鍗曠嫭鏀撅紝瑙佸緞鍚戣彍鍗?
-                   鏃佽竟鐨勮鏄庘€斺€攑age-wrap 鐨?opacity:.95 浼氳瀹冨彉鎴愬唴閮?position:fixed
-                   鍏冪礌鐨勫畾浣嶅熀鍑嗭紝杩欓噷鍙暀瑙﹀彂鎸夐挳鍦ㄥ伐鍏锋爮鍘熶綅銆?-->
+              <!-- 手机端：花瓣式径向菜单不适合小屏（花瓣多、手指精度有限），
+                   改成普通的下拉复选列表，功能等价（同一份 tag 数据、同一套多选状态）。
+                   面板本体（.bw-type-dd-panel）挪到下方 <main> 外面单独放，见径向菜单
+                   旁边的说明——page-wrap 的 opacity:.95 会让它变成内部 position:fixed
+                   元素的定位基准，这里只留触发按钮在工具栏原位。 -->
               <div class="bw-type-dd-wrap" id="bw-type-dd-wrap">
                 <button class="bw-type-dd-trigger" id="bw-type-dd-trigger" type="button">
-                  <span>绫诲瀷绛涢€?/span>
+                  <span>类型筛选</span>
                   <span class="bw-type-dd-count" id="bw-type-dd-count" style="display:none">0</span>
                   <svg class="bw-type-dd-arrow" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
                 </button>
@@ -191,105 +188,105 @@
           </div>
         </div>
 
-        <!-- 鍖哄潡鈶★細鏄剧ず璁剧疆 -->
+        <!-- 区块②：显示设置 -->
         <div class="bw-tb-group">
-          <span class="bw-tb-group-label">鏄剧ず璁剧疆</span>
+          <span class="bw-tb-group-label">显示设置</span>
           <div class="bw-tb-group-body">
             <span class="bw-order-stats" id="bw-order-stats"></span>
-            <div class="bw-mult-wrap" title="浠锋牸鐩爣 = 鍧囦环 脳 鍊嶇巼">
-              <span class="bw-mult-label">鍧囦环鍊嶇巼</span>
+            <div class="bw-mult-wrap" title="价格目标 = 均价 × 倍率">
+              <span class="bw-mult-label">均价倍率</span>
               <input type="number" id="bw-multiplier" class="bw-mult-input" value="1" min="0.1" max="20" step="0.1">
-              <span class="bw-mult-x">脳</span>
+              <span class="bw-mult-x">×</span>
             </div>
-            <button class="bw-lang-btn" id="bw-lang-btn" title="鍒囨崲涓?鑻辨枃鍚嶇О" aria-label="鍒囨崲璇█">
+            <button class="bw-lang-btn" id="bw-lang-btn" title="切换中/英文名称" aria-label="切换语言">
               <span class="bw-lang-inner">
-                <span class="bw-lang-seg active" id="bw-lang-zh">涓?/span>
+                <span class="bw-lang-seg active" id="bw-lang-zh">中</span>
                 <span class="bw-lang-seg" id="bw-lang-en">EN</span>
               </span>
             </button>
             <div class="bw-sort-wrap" id="bw-sort-wrap">
               <button class="bw-sort-trigger" id="bw-sort-trigger">
-                <span id="bw-sort-label">鏈€鏂版洿鏂?/span>
+                <span id="bw-sort-label">最新更新</span>
                 <svg class="bw-sort-arrow" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
               </button>
               <div class="bw-sort-dropdown" id="bw-sort-dropdown">
-                <div class="bw-sort-item active" data-sort="updated_desc">鏈€鏂版洿鏂?/div>
-                <div class="bw-sort-item" data-sort="updated_asc">鏈€鏃╂洿鏂?/div>
-                <div class="bw-sort-item" data-sort="name_asc">鍚嶇О姝ｅ簭 A鈫抁</div>
-                <div class="bw-sort-item" data-sort="name_desc">鍚嶇О閫嗗簭 Z鈫扐</div>
-                <div class="bw-sort-item" data-sort="price_asc">浠锋牸鍗囧簭</div>
-                <div class="bw-sort-item" data-sort="price_desc">浠锋牸闄嶅簭</div>
-                <div class="bw-sort-item" data-sort="created_desc">鏈€鏂版寕鍏?/div>
-                <div class="bw-sort-item" data-sort="created_asc">鏈€鏃╂寕鍏?/div>
-                <div class="bw-sort-item" data-sort="qty_desc">鏁伴噺闄嶅簭</div>
-                <div class="bw-sort-item" data-sort="qty_asc">鏁伴噺鍗囧簭</div>
+                <div class="bw-sort-item active" data-sort="updated_desc">最新更新</div>
+                <div class="bw-sort-item" data-sort="updated_asc">最早更新</div>
+                <div class="bw-sort-item" data-sort="name_asc">名称正序 A→Z</div>
+                <div class="bw-sort-item" data-sort="name_desc">名称逆序 Z→A</div>
+                <div class="bw-sort-item" data-sort="price_asc">价格升序</div>
+                <div class="bw-sort-item" data-sort="price_desc">价格降序</div>
+                <div class="bw-sort-item" data-sort="created_desc">最新挂入</div>
+                <div class="bw-sort-item" data-sort="created_asc">最早挂入</div>
+                <div class="bw-sort-item" data-sort="qty_desc">数量降序</div>
+                <div class="bw-sort-item" data-sort="qty_asc">数量升序</div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- 鍖哄潡鈶細蹇嵎鎿嶄綔 -->
+        <!-- 区块③：快捷操作 -->
         <div class="bw-tb-group">
-          <span class="bw-tb-group-label">蹇嵎鎿嶄綔</span>
+          <span class="bw-tb-group-label">快捷操作</span>
           <div class="bw-tb-group-body">
-            <button class="bw-vis-all-btn bw-refresh-btn" id="bw-refresh-items-btn" title="閲嶆柊鎷夊彇璁㈠崟涓庣墿鍝佹暟鎹紙鍚腑鏂囧悕锛?>
+            <button class="bw-vis-all-btn bw-refresh-btn" id="bw-refresh-items-btn" title="重新拉取订单与物品数据（含中文名）">
               <svg class="bw-btn-icon" viewBox="0 0 14 14" fill="none"><path d="M11.5 7A4.5 4.5 0 1 1 7 2.5M11.5 2v3.5H8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              鍒锋柊璁㈠崟鐘舵€?
+              刷新订单状态
             </button>
-            <button class="bw-vis-all-btn" id="bw-vis-show-all" title="鏄剧ず鍏ㄩ儴璁㈠崟">鏄剧ず鍏ㄩ儴</button>
-            <button class="bw-vis-all-btn is-hide" id="bw-vis-hide-all" title="闅愯棌鍏ㄩ儴璁㈠崟">闅愯棌鍏ㄩ儴</button>
+            <button class="bw-vis-all-btn" id="bw-vis-show-all" title="显示全部订单">显示全部</button>
+            <button class="bw-vis-all-btn is-hide" id="bw-vis-hide-all" title="隐藏全部订单">隐藏全部</button>
             <button class="bw-create-btn" id="bw-create-btn">
               <svg class="bw-btn-icon" viewBox="0 0 12 12" fill="none"><path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-              鍒涘缓璁㈠崟
+              创建订单
             </button>
           </div>
         </div>
       </div>
 
-      <!-- 鎵归噺鎿嶄綔闈㈡澘锛堝缁堟樉绀猴級 -->
+      <!-- 批量操作面板（始终显示） -->
       <div class="bw-batch-panel" id="bw-batch-panel">
         <div class="bw-batch-header">
-          <span class="bw-batch-title">鎵归噺缂栬緫</span>
-          <span class="bw-batch-count-label">褰撳墠绛涢€?<strong id="bw-batch-count">0</strong> 鏉?路 <span id="bw-batch-type-label" class="bw-batch-type-tag">鍏ㄩ儴</span></span>
-          <div class="bw-batch-type-pills" title="鎵归噺鎿嶄綔鑼冨洿">
-            <button class="bw-batch-type-pill active" data-bt="all">鍏ㄩ儴</button>
-            <button class="bw-batch-type-pill" data-bt="sell">鍑哄敭</button>
-            <button class="bw-batch-type-pill" data-bt="buy">姹傝喘</button>
+          <span class="bw-batch-title">批量编辑</span>
+          <span class="bw-batch-count-label">当前筛选 <strong id="bw-batch-count">0</strong> 条 · <span id="bw-batch-type-label" class="bw-batch-type-tag">全部</span></span>
+          <div class="bw-batch-type-pills" title="批量操作范围">
+            <button class="bw-batch-type-pill active" data-bt="all">全部</button>
+            <button class="bw-batch-type-pill" data-bt="sell">出售</button>
+            <button class="bw-batch-type-pill" data-bt="buy">求购</button>
           </div>
         </div>
         <div class="bw-batch-controls">
           <div class="bw-batch-item">
-            <label class="bw-batch-field-label">璁惧畾浠锋牸</label>
+            <label class="bw-batch-field-label">设定价格</label>
             <div class="bw-batch-input-row">
-              <input type="number" id="bw-batch-price" class="bw-batch-input" placeholder="鐧介噾" min="1">
+              <input type="number" id="bw-batch-price" class="bw-batch-input" placeholder="白金" min="1">
               <span class="bw-batch-unit">p</span>
-              <button class="bw-batch-btn" id="bw-batch-price-btn">搴旂敤</button>
+              <button class="bw-batch-btn" id="bw-batch-price-btn">应用</button>
             </div>
           </div>
           <div class="bw-batch-item">
-            <label class="bw-batch-field-label">璁惧畾鏁伴噺</label>
+            <label class="bw-batch-field-label">设定数量</label>
             <div class="bw-batch-input-row">
-              <input type="number" id="bw-batch-qty" class="bw-batch-input" placeholder="鏁伴噺" min="1">
-              <button class="bw-batch-btn" id="bw-batch-qty-btn">搴旂敤</button>
+              <input type="number" id="bw-batch-qty" class="bw-batch-input" placeholder="数量" min="1">
+              <button class="bw-batch-btn" id="bw-batch-qty-btn">应用</button>
             </div>
           </div>
           <div class="bw-batch-item bw-batch-item-accent">
-            <label class="bw-batch-field-label">鍧囦环 脳 鍊嶇巼</label>
+            <label class="bw-batch-field-label">均价 × 倍率</label>
             <div class="bw-batch-input-row">
-              <input type="number" id="bw-batch-mult-input" class="bw-batch-input" placeholder="鍊嶇巼" min="0.1" step="0.1" value="1">
-              <span class="bw-batch-unit">脳</span>
-              <button class="bw-batch-btn bw-batch-btn-accent" id="bw-batch-mult-btn">鎵归噺搴旂敤</button>
+              <input type="number" id="bw-batch-mult-input" class="bw-batch-input" placeholder="倍率" min="0.1" step="0.1" value="1">
+              <span class="bw-batch-unit">×</span>
+              <button class="bw-batch-btn bw-batch-btn-accent" id="bw-batch-mult-btn">批量应用</button>
             </div>
-            <div class="bw-round-pills" id="bw-round-pills" title="璁＄畻鍑虹殑鐩爣浠峰啀鍚戜笂鍙栨暣锛堜緥 32 脳 绮剧‘ 鈫?35 / 绮剧‘脳10 鈫?40锛?>
-              <button class="bw-round-pill active" data-round="none">绮剧‘</button>
-              <button class="bw-round-pill" data-round="5">绮剧‘脳5</button>
-              <button class="bw-round-pill" data-round="10">绮剧‘脳10</button>
+            <div class="bw-round-pills" id="bw-round-pills" title="计算出的目标价再向上取整（例 32 × 精确 → 35 / 精确×10 → 40）">
+              <button class="bw-round-pill active" data-round="none">精确</button>
+              <button class="bw-round-pill" data-round="5">精确×5</button>
+              <button class="bw-round-pill" data-round="10">精确×10</button>
             </div>
           </div>
           <div class="bw-batch-item">
-            <label class="bw-batch-field-label">鍘熶环鍒锋柊璁㈠崟</label>
+            <label class="bw-batch-field-label">原价刷新订单</label>
             <div class="bw-batch-input-row">
-              <button class="bw-batch-btn" id="bw-batch-refresh-btn" title="涓嶆敼鍙樹环鏍?鏁伴噺/鍙鎬э紝浠呭埛鏂板綋鍓嶇瓫閫夎鍗曠殑鏇存柊鏃堕棿">鍘熶环鍒锋柊</button>
+              <button class="bw-batch-btn" id="bw-batch-refresh-btn" title="不改变价格/数量/可见性，仅刷新当前筛选订单的更新时间">原价刷新</button>
             </div>
           </div>
         </div>
@@ -298,25 +295,25 @@
             <div class="bw-batch-bar" id="bw-batch-bar"></div>
           </div>
           <span class="bw-batch-prog-text" id="bw-batch-prog-text">0 / 0</span>
-          <button class="bw-batch-abort-btn" id="bw-batch-abort-btn" title="涓褰撳墠鎵瑰鐞嗕换鍔?>
+          <button class="bw-batch-abort-btn" id="bw-batch-abort-btn" title="中止当前批处理任务">
             <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><rect x="2" y="2" width="8" height="8" rx="1"/></svg>
-            涓
+            中止
           </button>
         </div>
 
-        <!-- 鎵归噺澶辫触鎬侀潰鏉?-->
+        <!-- 批量失败态面板 -->
         <div class="bw-batch-fail" id="bw-batch-fail" style="display:none">
           <span class="bw-c bw-c-tl"></span><span class="bw-c bw-c-tr"></span>
           <span class="bw-c bw-c-bl"></span><span class="bw-c bw-c-br"></span>
           <div class="bw-batch-fail-head">
             <span class="bw-batch-fail-title">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1.5L14.5 13H1.5L8 1.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><line x1="8" y1="6" x2="8" y2="9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11" r=".8" fill="currentColor"/></svg>
-              <strong id="bw-batch-fail-n">0</strong> 鏉℃搷浣滃け璐?
+              <strong id="bw-batch-fail-n">0</strong> 条操作失败
             </span>
             <div class="bw-batch-fail-actions">
-              <button class="bw-batch-fail-btn" id="bw-batch-fail-toggle">灞曞紑璇︽儏</button>
-              <button class="bw-batch-fail-btn bw-batch-fail-retry" id="bw-batch-fail-retry">涓€閿噸璇?/button>
-              <button class="bw-batch-fail-btn bw-batch-fail-close" id="bw-batch-fail-close" title="鍏抽棴">鉁?/button>
+              <button class="bw-batch-fail-btn" id="bw-batch-fail-toggle">展开详情</button>
+              <button class="bw-batch-fail-btn bw-batch-fail-retry" id="bw-batch-fail-retry">一键重试</button>
+              <button class="bw-batch-fail-btn bw-batch-fail-close" id="bw-batch-fail-close" title="关闭">✕</button>
             </div>
           </div>
           <div class="bw-batch-fail-list" id="bw-batch-fail-list" style="display:none"></div>
@@ -324,22 +321,22 @@
       </div>
     </div>
 
-    <!-- 浠锋牸璀︽姤娴姩鎸夐挳锛堟湁璀︽姤鏃跺嚭鐜帮級 -->
-    <button class="bw-alert-fab" id="bw-alert-fab" style="display:none" title="鏌ョ湅浠锋牸璀︽姤">
+    <!-- 价格警报浮动按钮（有警报时出现） -->
+    <button class="bw-alert-fab" id="bw-alert-fab" style="display:none" title="查看价格警报">
       <svg class="bw-fab-icon" viewBox="0 0 16 16" fill="none" width="14" height="14"><path d="M8 1.5L14.5 13H1.5L8 1.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><line x1="8" y1="6" x2="8" y2="9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11" r=".8" fill="currentColor"/></svg>
       <span id="bw-alert-fab-n">0</span>
     </button>
 
-    <!-- 璁㈠崟鍒嗘爮 -->
+    <!-- 订单分栏 -->
     <section class="bw-orders">
       <div class="bw-orders-col">
-        <h2 class="bw-col-title bw-col-sell">鍑哄敭璁㈠崟 <span class="bw-col-count" id="bw-sell-count"></span></h2>
+        <h2 class="bw-col-title bw-col-sell">出售订单 <span class="bw-col-count" id="bw-sell-count"></span></h2>
         <div id="bw-sell-list" class="bw-order-list">
           <div class="bw-skel-row"></div><div class="bw-skel-row"></div><div class="bw-skel-row"></div>
         </div>
       </div>
       <div class="bw-orders-col">
-        <h2 class="bw-col-title bw-col-buy">姹傝喘璁㈠崟 <span class="bw-col-count" id="bw-buy-count"></span></h2>
+        <h2 class="bw-col-title bw-col-buy">求购订单 <span class="bw-col-count" id="bw-buy-count"></span></h2>
         <div id="bw-buy-list" class="bw-order-list">
           <div class="bw-skel-row"></div><div class="bw-skel-row"></div><div class="bw-skel-row"></div>
         </div>
@@ -347,100 +344,100 @@
     </section>
   </main>
 
-  <!-- 搴曢儴澶囨鏍?-->
+  <!-- 底部备案栏 -->
   <footer class="bw-footer">
     <div class="bw-footer-sep"></div>
     <div class="bw-footer-inner">
       <div class="bw-beian-row">
-        <a href="https://beian.miit.gov.cn/" target="_self" rel="noopener">娌狪CP澶?022033368鍙?/a>
-        <img src="picture/gongan-beian.png" alt="鍏畨澶囨" class="bw-beian-icon">
-        <a href="https://beian.mps.gov.cn/#/query/webSearch?code=31015102000215" rel="noreferrer" target="_blank">娌叕缃戝畨澶?1015102000215鍙?/a>
+        <a href="https://beian.miit.gov.cn/" target="_self" rel="noopener">沪ICP备2022033368号</a>
+        <img src="picture/gongan-beian.png" alt="公安备案" class="bw-beian-icon">
+        <a href="https://beian.mps.gov.cn/#/query/webSearch?code=31015102000215" rel="noreferrer" target="_blank">沪公网安备31015102000215号</a>
       </div>
       <p>Copyright &copy; 2026 CSC Alliance All Rights Reserved.</p>
-      <p>鐗规澹版槑锛氭湰绔欐槸绾叕鐩婃€ц川锛屼笖棣栭〉鐨勫僵铏归鏍间笉浠ｈ〃鏀寔鎬у皯鏁扮兢浣擄紝鏈涚煡鎮?/p>
+      <p>特此声明：本站是纯公益性质，且首页的彩虹风格不代表支持性少数群体，望知悉</p>
     </div>
   </footer>
 
-  <!-- 渚ц竟蹇嵎瀵艰埅锛氫竴閿洖椤堕儴 / 涓€閿埌搴曢儴 -->
+  <!-- 侧边快捷导航：一键回顶部 / 一键到底部 -->
   <div class="bw-scrollnav" id="bw-scrollnav" style="display:none">
-    <button class="bw-scrollnav-btn" id="bw-scroll-top-btn" title="鍥炲埌椤堕儴">
+    <button class="bw-scrollnav-btn" id="bw-scroll-top-btn" title="回到顶部">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 9.5L8 5l4.5 4.5"/><path d="M3.5 13.5L8 9l4.5 4.5" opacity=".45"/></svg>
     </button>
-    <button class="bw-scrollnav-btn" id="bw-scroll-bottom-btn" title="鍒拌揪搴曢儴">
+    <button class="bw-scrollnav-btn" id="bw-scroll-bottom-btn" title="到达底部">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6.5L8 11l4.5-4.5" opacity=".45"/><path d="M3.5 2.5L8 7l4.5-4.5"/></svg>
     </button>
   </div>
 
-  <!-- 缂栬緫鎶藉眽閬僵 -->
+  <!-- 编辑抽屉遮罩 -->
   <div id="bw-edit-overlay" class="bw-panel-overlay"></div>
 
-  <!-- 缂栬緫鎶藉眽 -->
-  <aside id="bw-edit-drawer" class="bw-edit-drawer" role="dialog" aria-modal="true" aria-label="缂栬緫璁㈠崟">
+  <!-- 编辑抽屉 -->
+  <aside id="bw-edit-drawer" class="bw-edit-drawer" role="dialog" aria-modal="true" aria-label="编辑订单">
     <span class="bw-c bw-c-tl"></span><span class="bw-c bw-c-tr"></span>
     <span class="bw-c bw-c-bl"></span><span class="bw-c bw-c-br"></span>
     <div class="bw-drawer-header">
-      <span class="bw-drawer-title" id="bw-drawer-item-name">鈥?/span>
-      <button class="bw-drawer-close" id="bw-drawer-close" title="鍏抽棴"><svg viewBox="0 0 10 10" fill="none" width="10" height="10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+      <span class="bw-drawer-title" id="bw-drawer-item-name">—</span>
+      <button class="bw-drawer-close" id="bw-drawer-close" title="关闭"><svg viewBox="0 0 10 10" fill="none" width="10" height="10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
     </div>
     <div class="bw-drawer-body">
       <div class="bw-drawer-type-badge" id="bw-drawer-type-badge"></div>
 
       <div class="bw-drawer-field">
-        <label class="bw-drawer-label">鍙鎬?/label>
+        <label class="bw-drawer-label">可见性</label>
         <div class="bw-vis-pills">
-          <button class="bw-vis-pill" data-val="true" id="bw-pill-visible">鏄剧ず</button>
-          <button class="bw-vis-pill" data-val="false" id="bw-pill-hidden">闅愯棌</button>
+          <button class="bw-vis-pill" data-val="true" id="bw-pill-visible">显示</button>
+          <button class="bw-vis-pill" data-val="false" id="bw-pill-hidden">隐藏</button>
         </div>
       </div>
 
       <div class="bw-drawer-field">
-        <label class="bw-drawer-label" for="bw-drawer-price">浠锋牸锛堢櫧閲戯級</label>
+        <label class="bw-drawer-label" for="bw-drawer-price">价格（白金）</label>
         <div class="bw-drawer-input-wrap">
-          <input type="number" id="bw-drawer-price" class="bw-drawer-input" min="1" max="900000" placeholder="渚嬪: 120">
+          <input type="number" id="bw-drawer-price" class="bw-drawer-input" min="1" max="900000" placeholder="例如: 120">
           <span class="bw-drawer-input-unit">p</span>
         </div>
         <div class="bw-drawer-price-hint" id="bw-drawer-price-hint"></div>
       </div>
 
       <div class="bw-drawer-field">
-        <label class="bw-drawer-label" for="bw-drawer-qty">鏁伴噺</label>
+        <label class="bw-drawer-label" for="bw-drawer-qty">数量</label>
         <div class="bw-drawer-input-wrap">
-          <input type="number" id="bw-drawer-qty" class="bw-drawer-input" min="1" max="9999" placeholder="渚嬪: 1">
+          <input type="number" id="bw-drawer-qty" class="bw-drawer-input" min="1" max="9999" placeholder="例如: 1">
         </div>
       </div>
 
       <div class="bw-drawer-field" id="bw-drawer-bulk-wrap" style="display:none">
-        <label class="bw-drawer-label">鎵归噺浜ゆ槗</label>
+        <label class="bw-drawer-label">批量交易</label>
         <div class="bw-vis-pills">
-          <button class="bw-vis-pill" id="bw-drawer-bulk-on">寮€鍚?/button>
-          <button class="bw-vis-pill active" id="bw-drawer-bulk-off">鍏抽棴</button>
+          <button class="bw-vis-pill" id="bw-drawer-bulk-on">开启</button>
+          <button class="bw-vis-pill active" id="bw-drawer-bulk-off">关闭</button>
         </div>
       </div>
 
       <div class="bw-drawer-field" id="bw-drawer-per-trade-wrap" style="display:none">
-        <label class="bw-drawer-label" for="bw-drawer-per-trade">鎵规澶у皬锛?鈥?锛?/label>
+        <label class="bw-drawer-label" for="bw-drawer-per-trade">批次大小（1–6）</label>
         <div class="bw-drawer-input-wrap">
-          <input type="number" id="bw-drawer-per-trade" class="bw-drawer-input" min="1" max="6" placeholder="1鈥?">
+          <input type="number" id="bw-drawer-per-trade" class="bw-drawer-input" min="1" max="6" placeholder="1–6">
         </div>
       </div>
 
       <div class="bw-drawer-field" id="bw-drawer-rank-wrap" style="display:none">
-        <label class="bw-drawer-label" for="bw-drawer-rank" id="bw-drawer-rank-label">绛夌骇</label>
+        <label class="bw-drawer-label" for="bw-drawer-rank" id="bw-drawer-rank-label">等级</label>
         <div class="bw-drawer-input-wrap">
           <input type="number" id="bw-drawer-rank" class="bw-drawer-input" min="0" value="0">
         </div>
       </div>
 
       <div class="bw-drawer-actions">
-        <button class="bw-drawer-btn bw-drawer-btn-update" id="bw-drawer-update">鏇存柊</button>
-        <button class="bw-drawer-btn bw-drawer-btn-delete" id="bw-drawer-delete">鍒犻櫎璁㈠崟</button>
+        <button class="bw-drawer-btn bw-drawer-btn-update" id="bw-drawer-update">更新</button>
+        <button class="bw-drawer-btn bw-drawer-btn-delete" id="bw-drawer-delete">删除订单</button>
       </div>
 
       <div class="bw-drawer-confirm-del" id="bw-drawer-confirm-del">
-        <p class="bw-drawer-confirm-text">纭鍒犻櫎姝よ鍗曪紵姝ゆ搷浣滀笉鍙挙閿€銆?/p>
+        <p class="bw-drawer-confirm-text">确认删除此订单？此操作不可撤销。</p>
         <div class="bw-drawer-confirm-btns">
-          <button class="bw-drawer-btn bw-drawer-btn-cancel" id="bw-drawer-confirm-no">鍙栨秷</button>
-          <button class="bw-drawer-btn bw-drawer-btn-delete-confirm" id="bw-drawer-confirm-yes">纭鍒犻櫎</button>
+          <button class="bw-drawer-btn bw-drawer-btn-cancel" id="bw-drawer-confirm-no">取消</button>
+          <button class="bw-drawer-btn bw-drawer-btn-delete-confirm" id="bw-drawer-confirm-yes">确认删除</button>
         </div>
       </div>
 
@@ -448,87 +445,87 @@
     </div>
   </aside>
 
-  <!-- 鍒涘缓鎶藉眽閬僵 -->
+  <!-- 创建抽屉遮罩 -->
   <div id="bw-create-overlay" class="bw-panel-overlay"></div>
 
-  <!-- 鍒涘缓鎶藉眽 -->
-  <aside id="bw-create-drawer" class="bw-edit-drawer" role="dialog" aria-modal="true" aria-label="鍒涘缓璁㈠崟">
+  <!-- 创建抽屉 -->
+  <aside id="bw-create-drawer" class="bw-edit-drawer" role="dialog" aria-modal="true" aria-label="创建订单">
     <span class="bw-c bw-c-tl"></span><span class="bw-c bw-c-tr"></span>
     <span class="bw-c bw-c-bl"></span><span class="bw-c bw-c-br"></span>
     <div class="bw-drawer-header">
-      <span class="bw-drawer-title">鍒涘缓鏂拌鍗?/span>
-      <button class="bw-drawer-close" id="bw-create-close" title="鍏抽棴"><svg viewBox="0 0 10 10" fill="none" width="10" height="10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+      <span class="bw-drawer-title">创建新订单</span>
+      <button class="bw-drawer-close" id="bw-create-close" title="关闭"><svg viewBox="0 0 10 10" fill="none" width="10" height="10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
     </div>
     <div class="bw-drawer-body">
       <div class="bw-drawer-field">
-        <label class="bw-drawer-label">鐗╁搧鎼滅储</label>
+        <label class="bw-drawer-label">物品搜索</label>
         <div class="bw-item-search-wrap">
-          <input type="text" id="bw-create-item-q" class="bw-drawer-input" placeholder="杈撳叆涓枃鎴栬嫳鏂囧悕绉扳€? autocomplete="off">
+          <input type="text" id="bw-create-item-q" class="bw-drawer-input" placeholder="输入中文或英文名称…" autocomplete="off">
           <input type="hidden" id="bw-create-item-id">
           <div class="bw-item-dropdown" id="bw-item-dropdown"></div>
         </div>
       </div>
 
       <div class="bw-drawer-field">
-        <label class="bw-drawer-label">璁㈠崟绫诲瀷</label>
+        <label class="bw-drawer-label">订单类型</label>
         <div class="bw-vis-pills">
-          <button class="bw-vis-pill active" id="bw-create-type-sell">鍑哄敭</button>
-          <button class="bw-vis-pill" id="bw-create-type-buy">姹傝喘</button>
+          <button class="bw-vis-pill active" id="bw-create-type-sell">出售</button>
+          <button class="bw-vis-pill" id="bw-create-type-buy">求购</button>
         </div>
       </div>
 
       <div class="bw-drawer-field">
-        <label class="bw-drawer-label">鍙鎬?/label>
+        <label class="bw-drawer-label">可见性</label>
         <div class="bw-vis-pills">
-          <button class="bw-vis-pill active" id="bw-create-vis-on">鏄剧ず</button>
-          <button class="bw-vis-pill" id="bw-create-vis-off">闅愯棌</button>
+          <button class="bw-vis-pill active" id="bw-create-vis-on">显示</button>
+          <button class="bw-vis-pill" id="bw-create-vis-off">隐藏</button>
         </div>
       </div>
 
       <div class="bw-drawer-field">
-        <label class="bw-drawer-label" for="bw-create-price">浠锋牸锛堢櫧閲戯級</label>
+        <label class="bw-drawer-label" for="bw-create-price">价格（白金）</label>
         <div class="bw-drawer-input-wrap">
-          <input type="number" id="bw-create-price" class="bw-drawer-input" min="1" max="900000" placeholder="渚嬪: 120">
+          <input type="number" id="bw-create-price" class="bw-drawer-input" min="1" max="900000" placeholder="例如: 120">
           <span class="bw-drawer-input-unit">p</span>
         </div>
       </div>
 
       <div class="bw-drawer-field">
-        <label class="bw-drawer-label" for="bw-create-qty">鏁伴噺</label>
+        <label class="bw-drawer-label" for="bw-create-qty">数量</label>
         <div class="bw-drawer-input-wrap">
-          <input type="number" id="bw-create-qty" class="bw-drawer-input" min="1" max="9999" placeholder="渚嬪: 1" value="1">
+          <input type="number" id="bw-create-qty" class="bw-drawer-input" min="1" max="9999" placeholder="例如: 1" value="1">
         </div>
       </div>
 
       <div class="bw-drawer-field" id="bw-create-bulk-wrap" style="display:none">
-        <label class="bw-drawer-label">鎵归噺浜ゆ槗</label>
+        <label class="bw-drawer-label">批量交易</label>
         <div class="bw-vis-pills">
-          <button class="bw-vis-pill" id="bw-create-bulk-on">寮€鍚?/button>
-          <button class="bw-vis-pill active" id="bw-create-bulk-off">鍏抽棴</button>
+          <button class="bw-vis-pill" id="bw-create-bulk-on">开启</button>
+          <button class="bw-vis-pill active" id="bw-create-bulk-off">关闭</button>
         </div>
       </div>
 
       <div class="bw-drawer-field" id="bw-create-per-trade-wrap" style="display:none">
-        <label class="bw-drawer-label" for="bw-create-per-trade">鎵规澶у皬锛?鈥?锛?/label>
+        <label class="bw-drawer-label" for="bw-create-per-trade">批次大小（1–6）</label>
         <div class="bw-drawer-input-wrap">
           <input type="number" id="bw-create-per-trade" class="bw-drawer-input" min="1" max="6" value="1">
         </div>
       </div>
 
       <div class="bw-drawer-field" id="bw-create-rank-wrap" style="display:none">
-        <label class="bw-drawer-label" for="bw-create-rank" id="bw-create-rank-label">绛夌骇</label>
+        <label class="bw-drawer-label" for="bw-create-rank" id="bw-create-rank-label">等级</label>
         <div class="bw-drawer-input-wrap">
           <input type="number" id="bw-create-rank" class="bw-drawer-input" min="0" value="0">
         </div>
       </div>
 
       <div class="bw-drawer-field" id="bw-create-subtype-wrap" style="display:none">
-        <label class="bw-drawer-label" for="bw-create-subtype">瀛愮被鍨?/label>
+        <label class="bw-drawer-label" for="bw-create-subtype">子类型</label>
         <select id="bw-create-subtype" class="bw-drawer-select"></select>
       </div>
 
       <div class="bw-drawer-actions">
-        <button class="bw-drawer-btn bw-drawer-btn-update" id="bw-create-submit">鍒涘缓璁㈠崟</button>
+        <button class="bw-drawer-btn bw-drawer-btn-update" id="bw-create-submit">创建订单</button>
       </div>
       <div class="bw-drawer-msg" id="bw-create-msg"></div>
     </div>
@@ -539,19 +536,19 @@
   <script src="js/shared.js"></script>
   <script src="js/price-key.js"></script>
   <script src="js/main.js"></script>
-<!-- 閲嶈鎻愰啋 鈥?鏆楃孩澶у瀷灞呬腑寮圭獥锛堢櫥褰曢〉/涓婚〉鍏辩敤锛?-->
+<!-- 重要提醒 — 暗红大型居中弹窗（登录页/主页共用） -->
 <div class="bw-important-overlay" id="bw-important-overlay" aria-hidden="true">
   <div class="bw-important-box" role="dialog" aria-modal="true" aria-labelledby="bw-important-title">
     <span class="bw-c bw-c-tl"></span><span class="bw-c bw-c-tr"></span>
     <span class="bw-c bw-c-bl"></span><span class="bw-c bw-c-br"></span>
-    <button class="bw-important-x" id="bw-important-x" aria-label="鍏抽棴">脳</button>
+    <button class="bw-important-x" id="bw-important-x" aria-label="关闭">×</button>
     <div class="bw-important-icon">!</div>
-    <div class="bw-important-title" id="bw-important-title">閲嶈鎻愰啋</div>
+    <div class="bw-important-title" id="bw-important-title">重要提醒</div>
     <div class="bw-important-msg">
-      <p>璇峰ぇ瀹舵敞鎰忥紝WM鐩墠灞呯劧缁?span class="bw-important-hl">銆愬垏鎹㈠湪绾跨姸鎬併€?/span>涔熷姞浜嗕竴涓獙璇佹満鍒讹紝瀵艰嚧鏈珯宸叉棤娉曞湪绔欏唴杩涜<span class="bw-important-hl">銆愮淮鎸?鏀瑰姩 鍦ㄧ嚎鐘舵€併€?/span>鐨勬搷浣滐紝浣嗘垜浠喅瀹氭柊澧?span class="bw-important-hl">銆愭壒閲忔搷浣溿€?/span>鍔熻兘锛屼互搴斿WM鐨勮繖绉嶉€嗗ぉ鏀瑰姩锛屼互鎻愬崌澶у鐨勪娇鐢ㄤ綋楠屻€?/p>
-      <p>澶у鐜板湪鍙互浣跨敤鏈珯鐨勬墍鏈夋壒閲忔搷浣滃姛鑳斤紝渚嬪<span class="bw-important-hl">銆愭壒閲忔敼浠枫€?/span>銆?span class="bw-important-hl">銆愭壒閲忎笂鏋躲€?/span>銆?span class="bw-important-hl">銆愭壒閲忎笅鏋躲€?/span>绛夊姛鑳姐€傝櫧鐒舵湰绔欎笉鑳藉府鍔╁ぇ瀹剁ǔ瀹氱淮鎸乄M鐨勫湪绾跨姸鎬佷簡锛屼絾鍚屾牱甯屾湜鍙互閫氳繃杩欎簺鎵归噺鎿嶄綔锛岃澶у鐨勪氦鏄撲箣鏃呮洿鍔犳柟渚裤€?/p>
+      <p>请大家注意，WM目前居然给<span class="bw-important-hl">【切换在线状态】</span>也加了一个验证机制，导致本站已无法在站内进行<span class="bw-important-hl">【维持/改动 在线状态】</span>的操作，但我们决定新增<span class="bw-important-hl">【批量操作】</span>功能，以应对WM的这种逆天改动，以提升大家的使用体验。</p>
+      <p>大家现在可以使用本站的所有批量操作功能，例如<span class="bw-important-hl">【批量改价】</span>、<span class="bw-important-hl">【批量上架】</span>、<span class="bw-important-hl">【批量下架】</span>等功能。虽然本站不能帮助大家稳定维持WM的在线状态了，但同样希望可以通过这些批量操作，让大家的交易之旅更加方便。</p>
     </div>
-    <button class="bw-important-close" id="bw-important-close">鎴戠煡閬撲簡</button>
+    <button class="bw-important-close" id="bw-important-close">我知道了</button>
   </div>
 </div>
 <script>
