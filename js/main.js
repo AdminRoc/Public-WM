@@ -174,12 +174,18 @@ async function loadOrders() {
     try {
       const j = await apiFetch('/orders');
       const raw = Array.isArray(j.data) ? j.data : [];
-      // 3000单 O(N*M) find 会卡死，建 Map O(N) — 严格复刻原 find 语义 (url_name||slug||id)
+      // 3000单 O(N*M) find 会卡死，建 Map O(N) — 严格复刻原 find 语义 (url_name||slug||id|itemId)
       const _itemMap = new Map();
-      for (var _mi=0; _mi<_items.length; _mi++) { var _it=_items[_mi]; var _k=_it.url_name||_it.slug||_it.id; if(_k) _itemMap.set(_k,_it); }
+      for (var _mi=0; _mi<_items.length; _mi++) { var _it=_items[_mi]; if(_it.slug) _itemMap.set(_it.slug,_it); if(_it.url_name) _itemMap.set(_it.url_name,_it); if(_it.id) _itemMap.set(_it.id,_it); }
       _orders = raw.map(function(o) {
-        const slug = o.item?.url_name || o.slug || o.item?.id || '';
-        const itemObj = slug ? (_itemMap.get(slug) || null) : null;
+        const rawSlug = o.item?.url_name || o.slug || o.item?.id || o.itemId || '';
+        let itemObj = rawSlug ? (_itemMap.get(rawSlug) || null) : null;
+        // Public 的 orders 仅含 itemId，需回退按 id 找 slug
+        if (!itemObj && o.itemId) {
+          itemObj = _items.find(function(it){ return it.id === o.itemId; }) || null;
+        }
+        const slug = itemObj ? (itemObj.slug || rawSlug) : rawSlug;
+        // 确保 _itemMap 命中 id 时也能拿到正确 slug
         /* v2 API 用 camelCase，统一别名到 snake_case 供渲染层使用 */
         return Object.assign({}, o, {
           order_type:  o.order_type  || o.orderType  || o.type || 'sell',
