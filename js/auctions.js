@@ -1713,9 +1713,7 @@ async function switchType(t) {
   document.querySelectorAll('.bw-auc-online-pill').forEach(function(b) {
     b.classList.toggle('active', b.dataset.ostatus === 'all');
   });
-  const ocrZone = document.getElementById('bw-auc-ocr-zone');
-  if (ocrZone) ocrZone.style.display = t === 'riven' ? '' : 'none';
-  const damBtn = document.querySelector('.bw-auc-sort-damage');
+const damBtn = document.querySelector('.bw-auc-sort-damage');
   if (damBtn) {
     damBtn.style.display = t === 'riven' ? 'none' : '';
     if (t === 'riven' && _sortBy === 'damage_desc') {
@@ -1739,125 +1737,7 @@ async function switchType(t) {
   if (_mode === 'manage') loadMine();
 }
 
-/* ══════════════════════════════════════════════════════
-   OCR 识图（裂罅Mod 专属）
-   ══════════════════════════════════════════════════════ */
-function parseRivenOcr(text) {
-  var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
-  var result = { weaponRaw: '', positives: [], negatives: [], rank: null, rerolls: null };
-  var statRe   = /^([+\-])\s*(\d+(?:[.,]\d+)?)\s*%\s*(.{2,})$/;
-  var rankRe   = /段位\s*(\d+)|mod\s*rank\s*[:\s]*(\d+)/i;
-  var rerollRe = /[↺]\s*(\d+)|循环\s*(\d+)|re.?rolls?\s*[:\s]*(\d+)/i;
-  var weaponFound = false;
-  lines.forEach(function(line) {
-    var sm = line.match(statRe);
-    if (sm) {
-      var positive = sm[1] === '+';
-      var value = parseFloat(sm[2].replace(',', '.'));
-      var rawName = sm[3].replace(/^[^一-鿿a-zA-Z]+/, '').trim();
-      if (positive) result.positives.push({ rawName: rawName, value: value });
-      else          result.negatives.push({ rawName: rawName, value: value });
-      return;
-    }
-    var rm = line.match(rankRe);
-    if (rm) { result.rank = parseInt(rm[1] || rm[2]); return; }
-    var rrm = line.match(rerollRe);
-    if (rrm) { result.rerolls = parseInt(rrm[1] || rrm[2] || rrm[3]); return; }
-    if (!weaponFound) {
-      var zhM = line.match(/^([一-鿿][一-鿿\s·]*)/);
-      if (zhM) {
-        result.weaponRaw = zhM[1].trim();
-      } else {
-        var words = line.split(/\s+/).filter(Boolean);
-        var nameWords = [];
-        for (var i = 0; i < words.length; i++) {
-          if (words[i].indexOf('-') !== -1) break;
-          nameWords.push(words[i]);
-        }
-        result.weaponRaw = nameWords.join(' ') || words[0] || '';
-      }
-      weaponFound = true;
-    }
-  });
-  return result;
-}
 
-function matchDictEntry(rawName, arr) {
-  var q = rawName.toLowerCase();
-  return arr.find(function(a) {
-    var zh = (a.i18n && a.i18n['zh-hans'] && a.i18n['zh-hans'].name) || '';
-    var en = (a.i18n && a.i18n.en && a.i18n.en.name) || '';
-    return zh.indexOf(rawName) !== -1 || rawName.indexOf(zh) !== -1
-        || en.toLowerCase().indexOf(q) !== -1 || q.indexOf(en.toLowerCase()) !== -1;
-  });
-}
-
-function setAcValue(id, slug, name) {
-  var input = document.getElementById(id);
-  if (!input) return;
-  input.dataset.slug = slug;
-  input.value = name;
-}
-
-function applyOcrToFilters(parsed) {
-  var weaponArr = _dictArr[_aType + '/weapons'] || [];
-  var attrArr   = _dictArr['riven/attributes']  || [];
-  var summary   = [];
-
-  if (parsed.weaponRaw) {
-    var wMatch = matchDictEntry(parsed.weaponRaw, weaponArr);
-    if (wMatch) {
-      setAcValue('bw-auc-weapon', wMatch.slug, i18nName(wMatch));
-      summary.push('武器：' + i18nName(wMatch) + '（OCR: ' + parsed.weaponRaw + '）');
-    } else {
-      summary.push('武器：未匹配「' + parsed.weaponRaw + '」');
-    }
-  }
-
-  var posIds = ['bw-auc-pos1', 'bw-auc-pos2', 'bw-auc-pos3'];
-  parsed.positives.forEach(function(attr, i) {
-    if (i >= posIds.length) return;
-    var m = matchDictEntry(attr.rawName, attrArr);
-    if (m) {
-      setAcValue(posIds[i], m.slug, i18nName(m));
-      summary.push('+ ' + i18nName(m) + ' ' + attr.value + '%');
-    } else {
-      summary.push('+ 未匹配「' + attr.rawName + '」');
-    }
-  });
-
-  if (parsed.negatives[0]) {
-    var neg = parsed.negatives[0];
-    var nm = matchDictEntry(neg.rawName, attrArr);
-    if (nm) {
-      setAcValue('bw-auc-neg', nm.slug, i18nName(nm));
-      summary.push('- ' + i18nName(nm) + ' ' + neg.value + '%');
-    } else {
-      summary.push('- 未匹配「' + neg.rawName + '」');
-    }
-  }
-
-  if (parsed.rank    != null) summary.push('段位 ' + parsed.rank);
-  if (parsed.rerolls != null) summary.push('循环 ' + parsed.rerolls);
-
-  var resultEl = document.getElementById('bw-auc-ocr-result');
-  if (resultEl) {
-    resultEl.innerHTML = summary.map(function(l) { return _escHtml(l); }).join('<br>');
-    resultEl.classList.add('is-visible');
-  }
-}
-
-function initOcrZone() {
-  var dropEl  = document.getElementById('bw-auc-ocr-drop');
-  var stripEl = document.getElementById('bw-auc-ocr-strip');
-  if (!dropEl || !stripEl) return;
-  initScreenshotIntake({
-    dropEl: dropEl, stripEl: stripEl, autoStart: true,
-    onStatus: function(txt) { setStatus(txt || ''); },
-    onTextRecognized: function(text) { setStatus(''); applyOcrToFilters(parseRivenOcr(text)); },
-    onError: function(err) { setStatus('识图失败：' + (err.message || err)); },
-  });
-}
 
 /* ── 主入口 ── */
 async function main() {
@@ -1889,7 +1769,6 @@ async function main() {
   bindSortControl();
   bindOnlineFilter();
   bindMineManage();
-  initOcrZone();
   await switchType('riven');
 }
 
