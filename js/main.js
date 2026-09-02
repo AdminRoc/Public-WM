@@ -80,20 +80,66 @@ function itemName(o) {
 ─────────────────────────────────────────────────────────── */
 const WM_ITEMS_CDN = 'https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/wm-items.json';
 const WM_ITEMS_RAW = 'https://raw.githubusercontent.com/AdminRoc/Public-WM/main/data/wm-items.json';
-async function loadItems() {
-  /* 同源 EdgeOne KV（实时最新）→ jsDelivr → raw → 同源 Pages 快照（兜底）；
-     持续重试直到成功，成功即自动停止 */
+/* 物品表浏览器强缓存 10分钟强制覆盖：PWM_KV 单key整包，Public 同 Private 三层 */
+const _ITEMS_LS_KEY = 'bw_items_cache_json';
+const _ITEMS_LS_TS  = 'bw_items_ts';
+let _itemsPollTimer = null;
+function _itemsLoadFromCache() {
+  try {
+    var raw = localStorage.getItem(_ITEMS_LS_KEY);
+    var ts = parseInt(localStorage.getItem(_ITEMS_LS_TS) || '0', 10);
+    if (!raw || !ts) return false;
+    if (Date.now() - ts > 30*24*3600*1000) return false;
+    var arr = JSON.parse(raw);
+    if (!Array.isArray(arr) || !arr.length) return false;
+    _items = arr;
+    _radialItemTagIndex = null;
+    return true;
+  } catch(e) { try{ localStorage.removeItem(_ITEMS_LS_KEY); }catch(_){} return false; }
+}
+function _itemsSaveToCache(arr) {
+  var run=function(){
+    try {
+      var s = JSON.stringify(arr);
+      localStorage.setItem(_ITEMS_LS_KEY, s);
+      localStorage.setItem(_ITEMS_LS_TS, String(Date.now()));
+    } catch(e) { try{ localStorage.removeItem(_ITEMS_LS_KEY); localStorage.setItem(_ITEMS_LS_KEY, JSON.stringify(arr)); localStorage.setItem(_ITEMS_LS_TS, String(Date.now())); }catch(_){} }
+  };
+  if(typeof requestIdleCallback==='function') requestIdleCallback(run,{timeout:2000}); else setTimeout(run,0);
+}
+async function _itemsFetchOnce() {
+  var ok=false;
   await createReliableLoader(
     ['/api/kv?key=wm_items_json', WM_ITEMS_CDN, WM_ITEMS_RAW, '/data/wm-items.json'],
-    function(j) {
-      var arr = Array.isArray(j && j.data) ? j.data : (Array.isArray(j) ? j : []);
-      if (!arr.length) return false;
+    function(j){
+      var arr = j && j.data ? j.data : j;
+      if (!Array.isArray(arr) || !arr.length) return false;
       _items = arr;
+      _radialItemTagIndex = null;
+      _itemsSaveToCache(arr);
+      ok=true;
+      if (_orders && _orders.length) { try{ render(); }catch(_){} }
       return true;
     },
-    { retryDelay: 2500 }
+    { retryDelay: 2500, fetchTimeout: 7000 }
   ).promise;
-  _radialItemTagIndex = null; // _items 变了，slug→tags 缓存需要重建
+  return ok;
+}
+async function loadItems() {
+  var hadCache = _itemsLoadFromCache();
+  if (hadCache) {
+    setTimeout(function(){ _itemsFetchOnce(); }, 800);
+  } else {
+    while (true) {
+      if (await _itemsFetchOnce()) break;
+      const hidden = typeof document !== 'undefined' && document.hidden;
+      await sleep(hidden ? 30000 : 2500);
+    }
+  }
+  _radialItemTagIndex = null;
+  if (_itemsPollTimer) clearInterval(_itemsPollTimer);
+  _itemsPollTimer = setInterval(function(){ if(!document.hidden) _itemsFetchOnce(); }, 10*60*1000);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden){ try{ var ts=parseInt(localStorage.getItem(_ITEMS_LS_TS)||'0',10); if(Date.now()-ts>10*60*1000) _itemsFetchOnce(); }catch(_){} } });
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -167,20 +213,74 @@ async function loadOrders() {
 ─────────────────────────────────────────────────────────── */
 const AVG_PRICES_CDN = 'https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/avg_prices_full.json';
 const AVG_PRICES_RAW = 'https://raw.githubusercontent.com/AdminRoc/Public-WM/main/data/avg_prices_full.json';
-async function preloadAvgPrices() {
-  /* 同源 EdgeOne KV（实时最新）→ jsDelivr → raw → 同源 Pages 快照（兜底）；
-     持续重试直到成功，成功即自动停止 */
+/* 均价长缓存 + 10分钟后台覆盖：内存 _avgCache → localStorage 30天 → KV/cdn/raw */
+const _AVG_LS_KEY = 'bw_avg_cache_json';
+const _AVG_LS_TS  = 'bw_avg_ts';
+let _avgPollTimer = null;
+function _avgLoadFromCache() {
+  try {
+    var raw = localStorage.getItem(_AVG_LS_KEY);
+    var ts = parseInt(localStorage.getItem(_AVG_LS_TS) || '0', 10);
+    if (!raw || !ts) return false;
+    if (Date.now() - ts > 30*24*3600*1000) return false;
+    var j = JSON.parse(raw);
+    if (j && j.ct) return false;
+    if (!j || typeof j !== 'object' || !Object.keys(j).length) return false;
+    Object.assign(_avgCache, j);
+    return true;
+  } catch(e) { try{ localStorage.removeItem(_AVG_LS_KEY); }catch(_){} return false; }
+}
+function _avgSaveToCache(data) {
+  var run = function(){
+    try {
+      var s = JSON.stringify(data);
+      localStorage.setItem(_AVG_LS_KEY, s);
+      localStorage.setItem(_AVG_LS_TS, String(Date.now()));
+    } catch(e) {
+      try { localStorage.removeItem(_AVG_LS_KEY); localStorage.setItem(_AVG_LS_KEY, JSON.stringify(data)); localStorage.setItem(_AVG_LS_TS, String(Date.now())); } catch(_){}
+    }
+  };
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(run, {timeout:2000}); else setTimeout(run, 0);
+}
+function _avgApplyAndRender(data, fromCache) {
+  if (data && data.data && typeof data.data === 'object' && !Array.isArray(data.data)) data = data.data;
+  if (!data || typeof data !== 'object' || !Object.keys(data).length) return false;
+  if (data.ct) return false;
+  var changed=false;
+  var keys=Object.keys(data);
+  for(var i=0;i<keys.length;i++){ var k=keys[i]; if(_avgCache[k]!==data[k]){ _avgCache[k]=data[k]; changed=true; } }
+  if (changed || !fromCache) {
+    _avgSaveToCache(_avgCache);
+    if (_orders && _orders.length) setTimeout(function(){ try{ loadMissingAvg(filtered()); updateAlertBadges(); }catch(_){} }, 0);
+  }
+  return true;
+}
+async function _avgFetchOnce() {
+  var ok = false;
   await createReliableLoader(
     ['/api/kv?key=avg_prices_full_json', AVG_PRICES_CDN, AVG_PRICES_RAW, '/data/avg_prices_full.json'],
-    function(data) {
-      if (!data || typeof data !== 'object') return false;
-      var keys = Object.keys(data);
-      if (!keys.length) return false;
-      Object.assign(_avgCache, data);
-      return true;
-    },
-    { retryDelay: 2500 }
+    function(data){ var r=_avgApplyAndRender(data,false); if(r) ok=true; return r; },
+    { retryDelay: 2500, fetchTimeout: 7000 }
   ).promise;
+  return ok;
+}
+async function preloadAvgPrices() {
+  var hadCache = _avgLoadFromCache();
+  if (hadCache) {
+    setTimeout(function(){ _avgFetchOnce(); }, 500);
+  } else {
+    await _avgFetchOnce();
+  }
+  if (_avgPollTimer) clearInterval(_avgPollTimer);
+  _avgPollTimer = setInterval(function(){
+    if (document.hidden) return;
+    _avgFetchOnce();
+  }, 10*60*1000);
+  document.addEventListener('visibilitychange', function(){
+    if (!document.hidden) {
+      try{ var ts=parseInt(localStorage.getItem(_AVG_LS_TS)||'0',10); if(Date.now()-ts>10*60*1000) _avgFetchOnce(); }catch(_){}
+    }
+  });
 }
 
 /* ──────────────────────────────────────────────────────────

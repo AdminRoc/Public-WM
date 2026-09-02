@@ -18,6 +18,8 @@ if (!window.__bwUtilsOnly) window.__fuiBootManual = true;
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 /* 可靠数据加载器：数据源挨个试，全挂了就反复重试直到成功或页面卸载。
+   - 单源 7s 超时，避免慢网挂死单源
+   - 密文包装 {v,ct,iv,sha256} 必须严密解密：无key/解密失败/sha256不匹配视为该源失败，自动试下一源，绝不把包装当明文
    - parseFn(json) 返回 truthy 就算"数据有效"，成了就自动停
    - 页面藏起来的时候降频重试（省流量），页面关了自然就停了
    返回 { promise, stop } */
@@ -25,34 +27,45 @@ function createReliableLoader(urls, parseFn, opts) {
   opts = opts || {};
   var retryDelay  = opts.retryDelay  != null ? opts.retryDelay  : 2500;
   var hiddenDelay = opts.hiddenDelay != null ? opts.hiddenDelay : 30000;
+  var fetchTimeout = opts.fetchTimeout != null ? opts.fetchTimeout : 7000;
   var stopped = false;
+  function fetchWithTimeout(url){
+    var ctrl; try{ ctrl=new AbortController(); }catch(e){ return fetch(url, { cache: 'no-cache' }); }
+    var t=setTimeout(function(){ try{ ctrl.abort(); }catch(e){} }, fetchTimeout);
+    return fetch(url, { cache: 'no-cache', signal: ctrl.signal }).then(function(r){ clearTimeout(t); return r; }, function(e){ clearTimeout(t); throw e; });
+  }
+  async function tryDecryptWrapper(j){
+    if(!j || !j.ct || !j.iv || j.v!==1) return j;
+    var b64=(typeof window!=='undefined'&&window.__PRICE_KEY_B64)?window.__PRICE_KEY_B64:null;
+    if(!b64) return null;
+    try{
+      var keyRaw=Uint8Array.from(atob(b64),function(c){return c.charCodeAt(0);});
+      var key=await crypto.subtle.importKey('raw',keyRaw,'AES-GCM',false,['decrypt']);
+      var iv=Uint8Array.from(atob(j.iv),function(c){return c.charCodeAt(0);});
+      var ct=Uint8Array.from(atob(j.ct),function(c){return c.charCodeAt(0);});
+      var pb=await crypto.subtle.decrypt({name:'AES-GCM',iv:iv},key,ct);
+      var txt=new TextDecoder().decode(pb);
+      if(j.sha256){
+        var hb=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(txt));
+        var hx=Array.from(new Uint8Array(hb)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+        if(hx!==j.sha256) return null;
+      }
+      return JSON.parse(txt);
+    }catch(e){ return null; }
+  }
   async function attempt() {
     for (var i = 0; i < urls.length; i++) {
       if (stopped) return null;
       try {
-        var r = await fetch(urls[i], { cache: 'no-cache' });
+        var r = await fetchWithTimeout(urls[i]);
         if (!r.ok) continue;
         var j = await r.json();
-        // 兼容加密包装：若为 {v,ct,iv} 则尝试前端解密（边缘已解密，cdn 回退需此）
-        if (j && j.ct && j.iv && j.v===1) {
-          try {
-            var b64=(typeof window!=='undefined'&&window.__PRICE_KEY_B64)?window.__PRICE_KEY_B64:null;
-            if(b64){
-              var keyRaw=Uint8Array.from(atob(b64),function(c){return c.charCodeAt(0);});
-              var key=await crypto.subtle.importKey('raw',keyRaw,'AES-GCM',false,['decrypt']);
-              var iv=Uint8Array.from(atob(j.iv),function(c){return c.charCodeAt(0);});
-              var ct=Uint8Array.from(atob(j.ct),function(c){return c.charCodeAt(0);});
-              var pb=await crypto.subtle.decrypt({name:'AES-GCM',iv:iv},key,ct);
-              var txt=new TextDecoder().decode(pb);
-              if(j.sha256){
-                var hb=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(txt));
-                var hx=Array.from(new Uint8Array(hb)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
-                if(hx!==j.sha256) throw new Error('sha256 mismatch');
-              }
-              j=JSON.parse(txt);
-            }
-          } catch(e) {}
+        if(j && j.ct && j.iv){
+          var dec = await tryDecryptWrapper(j);
+          if(dec===null) continue;
+          j = dec;
         }
+        if(j && j.ct) continue;
         var ok = parseFn(j);
         if (ok && typeof ok.then === 'function') ok = await ok;
         if (ok) return true;
