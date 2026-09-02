@@ -1812,6 +1812,7 @@ async function main() {
   if (typeof _isMinimal !== 'function' || !_isMinimal()) preloadAvgPrices();
   try { await loadOrders(); }
   catch(e) {
+      if (e && e.message && e.message.indexOf('会话已过期') !== -1) { try{ _handleSessionExpired(); }catch(_){} throw e; }
     /* 首次加载订单失败：WM 信封翻译成人话再渲染，避免 raw JSON 占满列表区 */
     document.getElementById('bw-sell-list').innerHTML = '<div class="bw-empty">加载失败：' + _escHtml(window.bwWmErrorText(e)) + '</div>';
     document.getElementById('bw-buy-list').innerHTML = '';
