@@ -22,6 +22,8 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
+  // 跨站字体（wfspeed.run → market/boss）由浏览器 CORS 处理，不经 SW，避免 Failed to convert
+  if (url.hostname !== location.hostname && /\.(woff2|woff|ttf|otf)$/.test(url.pathname)) return;
   // cdn/raw 的 wm-items/avg 走 stale-while-revalidate（Public 1.8M/590k，Private 同）
   if (url.hostname.includes('cdn.jsdelivr.net') || url.hostname.includes('raw.githubusercontent.com')) {
     e.respondWith(caches.open(CACHE).then(c => c.match(e.request).then(cached => {
