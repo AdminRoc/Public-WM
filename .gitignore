@@ -1,26 +1,28 @@
-# 环境变量文件（包含API密钥、密码等敏感信息）
+﻿# 鐜鍙橀噺鏂囦欢锛堝寘鍚獳PI瀵嗛挜銆佸瘑鐮佺瓑鏁忔劅淇℃伅锛?
 .env
 .env.local
 .env.*.local
 
-# Wrangler 临时文件
+# Wrangler 涓存椂鏂囦欢
 .wrangler/
 .dev.vars
 
-# 日志文件
+# 鏃ュ織鏂囦欢
 *.log
 
-# 操作系统文件
+# 鎿嶄綔绯荤粺鏂囦欢
 Thumbs.db
 
-# 备份文件
+# 澶囦唤鏂囦欢
 *.bak
 *.backup
 
-# Python 缓存
+# Python 缂撳瓨
 __pycache__/
 *.pyc
 
 # price-key derived at build, not committed with real key
 js/price-key.js
+!js/price-key.js
+
 
