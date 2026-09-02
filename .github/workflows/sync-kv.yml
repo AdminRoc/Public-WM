@@ -25,9 +25,11 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: 写入 EdgeOne KV
+      - name: 写入 EdgeOne KV（双写：PWM_KV + BWM_KV 省 Private 私库 Action）
         env:
           KV_WRITE_TOKEN: ${{ secrets.KV_WRITE_TOKEN }}
+          BWM_KV_WRITE_TOKEN: ${{ secrets.BWM_KV_WRITE_TOKEN }}
+          BWM_UPDATE_URL: ${{ secrets.BWM_UPDATE_URL }}
         run: |
           set +e
           fail=0
@@ -51,11 +53,29 @@ jobs:
                 -H "Content-Type: application/json" \
                 --data-binary "@/tmp/kv-payload.json")
               if [ "$code" = "200" ]; then break; fi
-              echo "kv $key 第 $attempt 次写入 HTTP $code，稍后重试..."
+              echo "kv $key 第 $attempt 次写入 PWM HTTP $code，稍后重试..."
               sleep 5
             done
-            echo "kv $key <- $src -> HTTP $code"
+            echo "kv $key <- $src -> PWM HTTP $code"
             if [ "$code" != "200" ]; then fail=1; fi
+            # 双写 BWM_KV（Private 私库无 Action，用公库顺带写，省 WM API）
+            if [ -n "${BWM_KV_WRITE_TOKEN}" ] && [ -n "${BWM_UPDATE_URL}" ]; then
+              code2=""
+              for attempt in 1 2 3; do
+                code2=$(curl -s -o /dev/null -w "%{http_code}" --max-time 300 \
+                  -X POST "${BWM_UPDATE_URL}" \
+                  -H "Authorization: Bearer ${BWM_KV_WRITE_TOKEN}" \
+                  -H "Content-Type: application/json" \
+                  --data-binary "@/tmp/kv-payload.json")
+                if [ "$code2" = "200" ]; then break; fi
+                echo "kv $key 第 $attempt 次写入 BWM HTTP $code2，稍后重试..."
+                sleep 5
+              done
+              echo "kv $key <- $src -> BWM HTTP $code2"
+              if [ "$code2" != "200" ]; then echo "BWM 写入 $key 失败 HTTP $code2（不阻断 PWM）"; fi
+            else
+              echo "skip BWM 双写（未配 BWM_KV_WRITE_TOKEN/BWM_UPDATE_URL）"
+            fi
             rm -f /tmp/kv-payload.json
           done
-          if [ "$fail" != "0" ]; then echo "存在 KV 写入失败，请检查 KV_WRITE_TOKEN / 边缘函数部署"; exit 1; fi
+          if [ "$fail" != "0" ]; then echo "存在 PWM KV 写入失败，请检查 KV_WRITE_TOKEN / 边缘函数部署"; exit 1; fi

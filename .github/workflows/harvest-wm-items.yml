@@ -2,15 +2,14 @@ name: 刷新物品总表
 
 # 拉取 WM 全量可交易物品总表，精简为前端所需字段，产出 data/wm-items.json。
 # 脚本：.github/scripts/harvest_wm_items.py（无需额外依赖）。
-# 产物提交到 main 后，首页（main.js）经 jsDelivr 引用：
+# 产物提交到 main 后，首页经 jsDelivr 引用：
 #   https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/wm-items.json
-# 前端直接加载，边缘函数（pwm-api.wfspeed.run）不再拉取这份大体积物品表，
-# 只承担登录/订单/在线状态等轻动态操作。物品总表变化低频：每日一次兜底。
+# 前端直接加载，边缘函数不再拉取大体积表。频率提至每2小时（原每日一次过稀）。
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 5 * * *'   # 每天 05:00
+    - cron: '0 */2 * * *'   # 每2小时（最慢2h，满足 Private 私库无Action 约束）
 
 concurrency:
   group: harvest-wm-items
