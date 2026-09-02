@@ -100,7 +100,8 @@ function _qLoadItems() {
     if(!_qItemsPollTimer){ _qItemsPollTimer=setInterval(function(){ if(!document.hidden) _qItemsFetchOnce(); },10*60*1000); document.addEventListener('visibilitychange', function(){ if(!document.hidden){ try{ var ts=parseInt(localStorage.getItem(_Q_ITEMS_LS_TS)||'0',10); if(Date.now()-ts>10*60*1000) _qItemsFetchOnce(); }catch(_){} } }); }
     return Promise.resolve(_qItems);
   }
-  return apiFetch('/items').then(function(j) { _qItems = j.data || []; _qItemsSave(_qItems); if(!_qItemsPollTimer){ _qItemsPollTimer=setInterval(function(){ if(!document.hidden) _qItemsFetchOnce(); },10*60*1000); } return _qItems; }).catch(function(e) { _qItems = []; throw e; });
+  // Public 走 PWM_KV 单key整包（同 main.js），不走 pwm-api 的 /items（404）
+  return _qItemsFetchOnce().then(function(ok){ if(ok && _qItems && _qItems.length) return _qItems; throw new Error('items load failed'); }).catch(function(e){ _qItems=[]; throw e; });
 }
 function _qLoadOrders() {
   return apiFetch('/orders').then(function(j) {
@@ -126,7 +127,7 @@ function _qLoadOrders() {
 }
 let _qAvgPollTimer=null;
 async function _qAvgFetchOnce(){
-  var urls=['/api/wm/avg-prices','https://market.wfspeed.run/api/kv?key=avg_prices_full_json','https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/avg_prices_full.json','https://raw.githubusercontent.com/AdminRoc/Public-WM/main/data/avg_prices_full.json','/data/avg_prices_full.json'];
+  var urls=['https://market.wfspeed.run/api/kv?key=avg_prices_full_json','https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/avg_prices_full.json','https://raw.githubusercontent.com/AdminRoc/Public-WM/main/data/avg_prices_full.json','/data/avg_prices_full.json','/api/wm/avg-prices'];
   var ok=false;
   await createReliableLoader(urls,function(j){
     if (j && j.data && typeof j.data === 'object' && !Array.isArray(j.data)) j=j.data;
@@ -145,7 +146,6 @@ function _qLoadAvg() {
     if (raw && ts) { var j = JSON.parse(raw); if (j && !j.ct && Object.keys(j).length > 10) { _qAvg = j; setTimeout(function(){ _qAvgFetchOnce(); },800); if(!_qAvgPollTimer){ _qAvgPollTimer=setInterval(function(){ if(!document.hidden) _qAvgFetchOnce(); },10*60*1000); document.addEventListener('visibilitychange', function(){ if(!document.hidden){ try{ var ts2=parseInt(localStorage.getItem('bw_avg_ts')||'0',10); if(Date.now()-ts2>10*60*1000) _qAvgFetchOnce(); }catch(_){} } }); } return Promise.resolve(_qAvg); } }
   } catch(e) {}
   var urls = [
-    '/api/wm/avg-prices',
     'https://market.wfspeed.run/api/kv?key=avg_prices_full_json',
     'https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/avg_prices_full.json',
     'https://raw.githubusercontent.com/AdminRoc/Public-WM/main/data/avg_prices_full.json',
