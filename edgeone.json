@@ -8,6 +8,7 @@
     { "source": "/data/*", "headers": [{ "key": "Cache-Control", "value": "public, max-age=600, s-maxage=600" }] },
     { "source": "/fonts/*", "headers": [{ "key": "Cache-Control", "value": "public, max-age=2592000, s-maxage=2592000" }] },
     { "source": "/picture/*", "headers": [{ "key": "Cache-Control", "value": "public, max-age=2592000, s-maxage=2592000" }] },
+    { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }] },
     { "source": "/api/*", "headers": [{ "key": "Cache-Control", "value": "no-store" }] },
     { "source": "/login/*.html", "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }] },
     { "source": "/auctions/*.html", "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }] },

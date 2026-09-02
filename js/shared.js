@@ -1089,3 +1089,7 @@ function bwToast(msg, type, title) {
      ═══════════════════════════════════════════════════════════ */
 
 })();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function(){ try{ navigator.serviceWorker.register('/sw.js').catch(function(){}); }catch(e){} });
+}

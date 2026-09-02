@@ -83,8 +83,21 @@ const WM_ITEMS_RAW = 'https://raw.githubusercontent.com/AdminRoc/Public-WM/main/
 /* 物品表浏览器强缓存 10分钟强制覆盖：PWM_KV 单key整包，Public 同 Private 三层 */
 const _ITEMS_LS_KEY = 'bw_items_cache_json';
 const _ITEMS_LS_TS  = 'bw_items_ts';
+const _ITEMS_IDB_DB = 'bw_cache_db';
+const _ITEMS_IDB_STORE = 'kv';
 let _itemsPollTimer = null;
-function _itemsLoadFromCache() {
+function _idbOpen(){ return new Promise(function(res, rej){ try{ var req=indexedDB.open(_ITEMS_IDB_DB,1); req.onupgradeneeded=function(e){ try{ e.target.result.createObjectStore(_ITEMS_IDB_STORE); }catch(_){} }; req.onsuccess=function(e){ res(e.target.result); }; req.onerror=function(e){ rej(e); }; }catch(e){ rej(e); } }); }
+async function _itemsLoadFromCache() {
+  // IndexedDB 优先（异步不堵主线程），失败回退 localStorage 同步
+  try {
+    var db=await _idbOpen();
+    var tx=db.transaction(_ITEMS_IDB_STORE,'readonly');
+    var store=tx.objectStore(_ITEMS_IDB_STORE);
+    var rec=await new Promise(function(res, rej){ var r=store.get(_ITEMS_LS_KEY); r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ rej(r.error); }; });
+    if(rec && rec.ts && rec.data && Array.isArray(rec.data) && rec.data.length){
+      if(Date.now()-rec.ts < 30*24*3600*1000){ _items=rec.data; _radialItemTagIndex=null; return true; }
+    }
+  } catch(e) {}
   try {
     var raw = localStorage.getItem(_ITEMS_LS_KEY);
     var ts = parseInt(localStorage.getItem(_ITEMS_LS_TS) || '0', 10);
@@ -99,11 +112,21 @@ function _itemsLoadFromCache() {
 }
 function _itemsSaveToCache(arr) {
   var run=function(){
+    // IndexedDB 异步
+    try{
+      _idbOpen().then(function(db){
+        try{
+          var tx=db.transaction(_ITEMS_IDB_STORE,'readwrite');
+          tx.objectStore(_ITEMS_IDB_STORE).put({data:arr, ts:Date.now()}, _ITEMS_LS_KEY);
+        }catch(_){}
+      }).catch(function(){});
+    }catch(_){}
+    // localStorage 同步兜底（小概率超额时静默丢弃）
     try {
       var s = JSON.stringify(arr);
       localStorage.setItem(_ITEMS_LS_KEY, s);
       localStorage.setItem(_ITEMS_LS_TS, String(Date.now()));
-    } catch(e) { try{ localStorage.removeItem(_ITEMS_LS_KEY); localStorage.setItem(_ITEMS_LS_KEY, JSON.stringify(arr)); localStorage.setItem(_ITEMS_LS_TS, String(Date.now())); }catch(_){} }
+    } catch(e) { try{ localStorage.removeItem(_ITEMS_LS_KEY); }catch(_){} }
   };
   if(typeof requestIdleCallback==='function') requestIdleCallback(run,{timeout:2000}); else setTimeout(run,0);
 }
@@ -126,7 +149,7 @@ async function _itemsFetchOnce() {
   return ok;
 }
 async function loadItems() {
-  var hadCache = _itemsLoadFromCache();
+  var hadCache = await _itemsLoadFromCache();
   if (hadCache) {
     setTimeout(function(){ _itemsFetchOnce(); }, 800);
   } else {
@@ -217,7 +240,16 @@ const AVG_PRICES_RAW = 'https://raw.githubusercontent.com/AdminRoc/Public-WM/mai
 const _AVG_LS_KEY = 'bw_avg_cache_json';
 const _AVG_LS_TS  = 'bw_avg_ts';
 let _avgPollTimer = null;
-function _avgLoadFromCache() {
+async function _avgLoadFromCache() {
+  try {
+    var db=await _idbOpen();
+    var tx=db.transaction(_ITEMS_IDB_STORE,'readonly');
+    var store=tx.objectStore(_ITEMS_IDB_STORE);
+    var rec=await new Promise(function(res, rej){ var r=store.get(_AVG_LS_KEY); r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ rej(r.error); }; });
+    if(rec && rec.ts && rec.data && typeof rec.data==='object' && Object.keys(rec.data).length){
+      if(Date.now()-rec.ts < 30*24*3600*1000 && !rec.data.ct){ Object.assign(_avgCache, rec.data); return true; }
+    }
+  } catch(e) {}
   try {
     var raw = localStorage.getItem(_AVG_LS_KEY);
     var ts = parseInt(localStorage.getItem(_AVG_LS_TS) || '0', 10);
@@ -232,12 +264,20 @@ function _avgLoadFromCache() {
 }
 function _avgSaveToCache(data) {
   var run = function(){
+    try{
+      _idbOpen().then(function(db){
+        try{
+          var tx=db.transaction(_ITEMS_IDB_STORE,'readwrite');
+          tx.objectStore(_ITEMS_IDB_STORE).put({data:data, ts:Date.now()}, _AVG_LS_KEY);
+        }catch(_){}
+      }).catch(function(){});
+    }catch(_){}
     try {
       var s = JSON.stringify(data);
       localStorage.setItem(_AVG_LS_KEY, s);
       localStorage.setItem(_AVG_LS_TS, String(Date.now()));
     } catch(e) {
-      try { localStorage.removeItem(_AVG_LS_KEY); localStorage.setItem(_AVG_LS_KEY, JSON.stringify(data)); localStorage.setItem(_AVG_LS_TS, String(Date.now())); } catch(_){}
+      try { localStorage.removeItem(_AVG_LS_KEY); }catch(_){}
     }
   };
   if (typeof requestIdleCallback === 'function') requestIdleCallback(run, {timeout:2000}); else setTimeout(run, 0);
@@ -265,7 +305,7 @@ async function _avgFetchOnce() {
   return ok;
 }
 async function preloadAvgPrices() {
-  var hadCache = _avgLoadFromCache();
+  var hadCache = await _avgLoadFromCache();
   if (hadCache) {
     setTimeout(function(){ _avgFetchOnce(); }, 500);
   } else {
