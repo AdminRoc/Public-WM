@@ -87,7 +87,7 @@ function _qItemsSave(arr){ try{ localStorage.setItem(_Q_ITEMS_LS_KEY,JSON.string
 async function _qItemsFetchOnce(){
   var ok=false;
   await createReliableLoader(
-    ['/api/wm/items','https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/wm-items.json','https://raw.githubusercontent.com/AdminRoc/Public-WM/main/data/wm-items.json'],
+    ['https://market.wfspeed.run/api/kv?key=wm_items_json','https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/wm-items.json','https://raw.githubusercontent.com/AdminRoc/Public-WM/main/data/wm-items.json','/api/kv?key=wm_items_json','/data/wm-items.json'],
     function(j){ var arr=j&&j.data?j.data:j; if(!Array.isArray(arr)||!arr.length) return false; _qItems=arr; _qItemsSave(arr); ok=true; return true; },
     {retryDelay:2500,fetchTimeout:7000}
   ).promise;

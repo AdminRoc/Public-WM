@@ -13,37 +13,53 @@
 
 /* ── 可选字体：中文（体积大，只提供 woff2，优先走 Ws-Web CDN，本仓副本兜底） ── */
 @font-face {
-  font-family: '仓迹高德国妙黑';  src: url('../fonts/仓迹高德国妙黑.woff2') format('woff2');
+  font-family: '仓迹高德国妙黑';
+  src: url('https://wfspeed.run/fonts/仓迹高德国妙黑.woff2') format('woff2'),
+       url('../fonts/仓迹高德国妙黑.woff2') format('woff2');
   font-weight: 400 900; font-style: normal; font-display: swap;
 }
 @font-face {
-  font-family: '演示秋鸿楷';  src: url('../fonts/演示秋鸿楷.woff2') format('woff2');
+  font-family: '演示秋鸿楷';
+  src: url('https://wfspeed.run/fonts/演示秋鸿楷.woff2') format('woff2'),
+       url('../fonts/演示秋鸿楷.woff2') format('woff2');
   font-weight: 400 900; font-style: normal; font-display: swap;
 }
 @font-face {
-  font-family: 'QIJIFALLBACK';  src: url('../fonts/QIJIFALLBACK.woff2') format('woff2');
+  font-family: 'QIJIFALLBACK';
+  src: url('https://wfspeed.run/fonts/QIJIFALLBACK.woff2') format('woff2'),
+       url('../fonts/QIJIFALLBACK.woff2') format('woff2');
   font-weight: 400 900; font-style: normal; font-display: swap;
 }
 
 /* ── 可选字体：英文/数字 ── */
 @font-face {
-  font-family: 'Teko-Bold-5';  src: url('../fonts/Teko-Bold-5.woff2') format('woff2');
+  font-family: 'Teko-Bold-5';
+  src: url('https://wfspeed.run/fonts/Teko-Bold-5.woff2') format('woff2'),
+       url('../fonts/Teko-Bold-5.woff2') format('woff2');
   font-weight: 700; font-style: normal; font-display: swap;
 }
 @font-face {
-  font-family: 'LEMONMILK-MediumItalic';  src: url('../fonts/LEMONMILK-MediumItalic.woff2') format('woff2');
+  font-family: 'LEMONMILK-MediumItalic';
+  src: url('https://wfspeed.run/fonts/LEMONMILK-MediumItalic.woff2') format('woff2'),
+       url('../fonts/LEMONMILK-MediumItalic.woff2') format('woff2');
   font-weight: 500; font-style: italic; font-display: swap;
 }
 @font-face {
-  font-family: 'Cako-Black';  src: url('../fonts/Cako-Black.woff2') format('woff2');
+  font-family: 'Cako-Black';
+  src: url('https://wfspeed.run/fonts/Cako-Black.woff2') format('woff2'),
+       url('../fonts/Cako-Black.woff2') format('woff2');
   font-weight: 900; font-style: normal; font-display: swap;
 }
 @font-face {
-  font-family: 'Adieu-Regular-Bold';  src: url('../fonts/Adieu-Regular-Bold.woff2') format('woff2');
+  font-family: 'Adieu-Regular-Bold';
+  src: url('https://wfspeed.run/fonts/Adieu-Regular-Bold.woff2') format('woff2'),
+       url('../fonts/Adieu-Regular-Bold.woff2') format('woff2');
   font-weight: 700; font-style: normal; font-display: swap;
 }
 @font-face {
-  font-family: 'Elsie-Black';  src: url('../fonts/Elsie-Black.woff2') format('woff2');
+  font-family: 'Elsie-Black';
+  src: url('https://wfspeed.run/fonts/Elsie-Black.woff2') format('woff2'),
+       url('../fonts/Elsie-Black.woff2') format('woff2');
   font-weight: 900; font-style: normal; font-display: swap;
 }
 
