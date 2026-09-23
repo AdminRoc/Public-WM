@@ -74,10 +74,13 @@ jobs:
                 if [ "$attempt" -lt 8 ]; then sleep 20; fi
               done
               echo "kv $key <- $src -> BWM HTTP $code2"
-              if [ "$code2" != "200" ]; then echo "::warning::BWM 写入 $key 失败 HTTP $code2（不阻断 PWM）"; fi
+              if [ "$code2" != "200" ]; then
+                echo "::error::BWM 写入 $key 失败 HTTP $code2（PWM 写入继续，最终 run 标记失败）"
+                fail=1
+              fi
             else
               echo "skip BWM 双写（未配 BWM_KV_WRITE_TOKEN/BWM_UPDATE_URL）"
             fi
             rm -f /tmp/kv-payload.json
           done
-          if [ "$fail" != "0" ]; then echo "存在 PWM KV 写入失败，请检查 KV_WRITE_TOKEN / 边缘函数部署"; exit 1; fi
+          if [ "$fail" != "0" ]; then echo "存在 PWM/BWM KV 写入失败，请检查对应令牌与边缘函数部署"; exit 1; fi
