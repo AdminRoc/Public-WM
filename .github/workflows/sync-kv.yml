@@ -13,7 +13,7 @@ on:
 
 concurrency:
   group: sync-kv
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   sync:
@@ -24,6 +24,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 1
+          ref: main
 
       - name: 写入 EdgeOne KV（双写：PWM_KV + BWM_KV 省 Private 私库 Action）
         env:
@@ -38,41 +39,42 @@ jobs:
             ["auction_dicts_json"]="data/auction-dicts.json"
             ["wm_items_json"]="data/wm-items.json"
           )
-          for key in "${!FILES[@]}"; do
+          for key in auction_dicts_json wm_items_json avg_prices_full_json; do
             src="${FILES[$key]}"
-            if [ ! -f "$src" ]; then
-              echo "skip $key ($src 不存在)"
-              continue
-            fi
+            test -f "$src" || { echo "::error::缺少 KV 源文件 $src"; exit 1; }
+            python3 -c "import json,sys; json.load(open(sys.argv[1],encoding='utf-8'))" "$src" || exit 1
+          done
+          for key in auction_dicts_json wm_items_json avg_prices_full_json; do
+            src="${FILES[$key]}"
             python3 -c "import json; content=open('$src').read(); open('/tmp/kv-payload.json','w').write(json.dumps({'key':'$key','value':content}))"
             code=""
-            for attempt in 1 2 3; do
-              code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 300 \
+            for attempt in 1 2 3 4 5 6 7 8; do
+              code=$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 20 --max-time 60 \
                 -X POST "https://market.wfspeed.run/api/update-kv" \
                 -H "Authorization: Bearer ${KV_WRITE_TOKEN}" \
                 -H "Content-Type: application/json" \
                 --data-binary "@/tmp/kv-payload.json")
               if [ "$code" = "200" ]; then break; fi
               echo "kv $key 第 $attempt 次写入 PWM HTTP $code，稍后重试..."
-              sleep 5
+              if [ "$attempt" -lt 8 ]; then sleep 20; fi
             done
             echo "kv $key <- $src -> PWM HTTP $code"
             if [ "$code" != "200" ]; then fail=1; fi
             # 双写 BWM_KV（Private 私库无 Action，用公库顺带写，省 WM API）
             if [ -n "${BWM_KV_WRITE_TOKEN}" ] && [ -n "${BWM_UPDATE_URL}" ]; then
               code2=""
-              for attempt in 1 2 3; do
-                code2=$(curl -s -o /dev/null -w "%{http_code}" --max-time 300 \
+              for attempt in 1 2 3 4 5 6 7 8; do
+                code2=$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 20 --max-time 60 \
                   -X POST "${BWM_UPDATE_URL}" \
                   -H "Authorization: Bearer ${BWM_KV_WRITE_TOKEN}" \
                   -H "Content-Type: application/json" \
                   --data-binary "@/tmp/kv-payload.json")
                 if [ "$code2" = "200" ]; then break; fi
                 echo "kv $key 第 $attempt 次写入 BWM HTTP $code2，稍后重试..."
-                sleep 5
+                if [ "$attempt" -lt 8 ]; then sleep 20; fi
               done
               echo "kv $key <- $src -> BWM HTTP $code2"
-              if [ "$code2" != "200" ]; then echo "BWM 写入 $key 失败 HTTP $code2（不阻断 PWM）"; fi
+              if [ "$code2" != "200" ]; then echo "::warning::BWM 写入 $key 失败 HTTP $code2（不阻断 PWM）"; fi
             else
               echo "skip BWM 双写（未配 BWM_KV_WRITE_TOKEN/BWM_UPDATE_URL）"
             fi
