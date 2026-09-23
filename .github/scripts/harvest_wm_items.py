@@ -10,7 +10,7 @@
 边缘函数只承担登录 / 订单 / 在线状态等轻动态操作。同均价/字典一样，页面读
 jsDelivr 最新产物而非 Pages 部署快照，避免手动低频部署导致数据过时。
 """
-import json, os, urllib.request, sys
+import json, os, urllib.request
 
 DIRECT = "https://api.warframe.market"
 
@@ -63,16 +63,22 @@ def main():
             "rarity":        it.get("rarity") or None,
             "tradingTax":    it.get("trading_tax") or None,
         })
+    slugs = [it.get("slug") for it in items]
+    if len(items) < 1500 or any(not slug for slug in slugs) or len(set(slugs)) != len(slugs):
+        raise RuntimeError("WM item manifest is incomplete or has duplicate slugs")
+    if os.path.exists(OUT):
+        with open(OUT, encoding="utf-8") as f:
+            previous = json.load(f).get("data") or []
+        missing = {it["slug"] for it in previous if it.get("slug")} - set(slugs)
+        if missing:
+            raise RuntimeError(f"WM item manifest lost {len(missing)} published slugs; keeping previous data")
+
     out_dir = os.path.dirname(os.path.abspath(OUT))
     os.makedirs(out_dir, exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump({"data": items}, f, ensure_ascii=False, separators=(",", ":"))
     kb = os.path.getsize(OUT) // 1024
     print(f"已保存 {OUT} ({len(items)} 项, {kb} KB)")
-
-    if not items:
-        sys.exit(1)
-
 
 if __name__ == "__main__":
     main()
