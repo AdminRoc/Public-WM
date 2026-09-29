@@ -8,7 +8,10 @@ name: 同步数据到 EdgeOne KV
 on:
   workflow_dispatch:
   workflow_run:
-    workflows: ["刷新全量均价数据", "刷新拍卖字典", "刷新物品总表"]
+    # A new item catalog dispatches the average refresh. Publish the new item
+    # manifest only after that full refresh succeeds, so KV never pairs it with
+    # the previous slug-keyed average artifact.
+    workflows: ["刷新全量均价数据", "刷新拍卖字典"]
     types: [completed]
 
 concurrency:
@@ -26,11 +29,42 @@ jobs:
           fetch-depth: 1
           ref: main
 
+      - name: 安装加密数据回读校验依赖
+        run: pip install cryptography -q
+
+      - name: 发布前核对物品清单与均价覆盖范围
+        env:
+          PRICE_DATA_SECRET: ${{ secrets.PRICE_DATA_SECRET }}
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, sys
+          sys.path.insert(0, '.github/scripts')
+          import crypto_price
+          items_doc = json.loads(pathlib.Path('data/wm-items.json').read_text(encoding='utf-8'))
+          items = items_doc.get('data')
+          prices = crypto_price.load_json('data/avg_prices_full.json')
+          if not isinstance(items, list) or len(items) < 1500:
+              raise SystemExit('current WM item manifest is invalid or incomplete')
+          if not isinstance(prices, dict):
+              raise SystemExit('average-price artifact is unreadable; refusing KV publication')
+          slugs = [str(item.get('slug') or '') for item in items]
+          ids = [str(item.get('id') or '') for item in items]
+          if any(not slug for slug in slugs) or len(set(slugs)) != len(slugs):
+              raise SystemExit('current WM item manifest has missing or duplicate slugs')
+          if any(not item_id for item_id in ids) or len(set(ids)) != len(ids):
+              raise SystemExit('current WM item manifest has missing or duplicate stable IDs')
+          missing = set(slugs) - set(prices)
+          if missing:
+              raise SystemExit('average-price artifact does not cover the current WM item manifest')
+          print(f'KV release preflight passed: {len(slugs)} current items covered by averages')
+          PY
+
       - name: 写入 EdgeOne KV（双写：PWM_KV + BWM_KV 省 Private 私库 Action）
         env:
           KV_WRITE_TOKEN: ${{ secrets.KV_WRITE_TOKEN }}
           BWM_KV_WRITE_TOKEN: ${{ secrets.BWM_KV_WRITE_TOKEN }}
           BWM_UPDATE_URL: ${{ secrets.BWM_UPDATE_URL }}
+          PRICE_DATA_SECRET: ${{ secrets.PRICE_DATA_SECRET }}
         run: |
           set +e
           fail=0
@@ -39,12 +73,45 @@ jobs:
             ["auction_dicts_json"]="data/auction-dicts.json"
             ["wm_items_json"]="data/wm-items.json"
           )
-          for key in auction_dicts_json wm_items_json avg_prices_full_json; do
+          verify_readback() {
+            local endpoint="$1" key="$2" src="$3" expected code body
+            expected=$(sha256sum "$src" | awk '{print $1}')
+            body="/tmp/${key}-readback-$(echo "$endpoint" | tr '/:' '__').json"
+            code=$(curl -sS -o "$body" -w "%{http_code}" --connect-timeout 20 --max-time 60 \
+              "${endpoint}?key=${key}&verify=${expected}")
+            if [ "$code" != "200" ]; then
+              echo "$key KV readback HTTP $code from ${endpoint}" >&2
+              return 1
+            fi
+            if ! python3 - "$key" "$src" "$body" <<'PY'
+          import json, pathlib, sys
+          key, source, readback = sys.argv[1:]
+          expected_raw = json.loads(pathlib.Path(source).read_text(encoding='utf-8'))
+          actual = json.loads(pathlib.Path(readback).read_text(encoding='utf-8'))
+          candidates = [expected_raw]
+          if key == 'avg_prices_full_json' and isinstance(expected_raw, dict) and expected_raw.get('ct'):
+              sys.path.insert(0, '.github/scripts')
+              import crypto_price
+              expected_plain = crypto_price.load_json(source)
+              if expected_plain is not None:
+                  candidates.append(expected_plain)
+          if not any(actual == candidate for candidate in candidates):
+              raise SystemExit(1)
+          PY
+            then
+              echo "$key KV readback value mismatch from ${endpoint}" >&2
+              return 1
+            fi
+            echo "$key KV readback value verified: ${endpoint}"
+            rm -f "$body"
+          }
+          # Price data first; the catalog manifest is the visible release marker and must be last.
+          for key in avg_prices_full_json auction_dicts_json wm_items_json; do
             src="${FILES[$key]}"
             test -f "$src" || { echo "::error::缺少 KV 源文件 $src"; exit 1; }
             python3 -c "import json,sys; json.load(open(sys.argv[1],encoding='utf-8'))" "$src" || exit 1
           done
-          for key in auction_dicts_json wm_items_json avg_prices_full_json; do
+          for key in avg_prices_full_json auction_dicts_json wm_items_json; do
             src="${FILES[$key]}"
             python3 -c "import json; content=open('$src').read(); open('/tmp/kv-payload.json','w').write(json.dumps({'key':'$key','value':content}))"
             code=""
@@ -59,7 +126,11 @@ jobs:
               if [ "$attempt" -lt 8 ]; then sleep 20; fi
             done
             echo "kv $key <- $src -> PWM HTTP $code"
-            if [ "$code" != "200" ]; then fail=1; fi
+            if [ "$code" != "200" ]; then
+              fail=1
+            else
+              verify_readback "https://market.wfspeed.run/api/kv" "$key" "$src" || fail=1
+            fi
             # 双写 BWM_KV（Private 私库无 Action，用公库顺带写，省 WM API）
             if [ -n "${BWM_KV_WRITE_TOKEN}" ] && [ -n "${BWM_UPDATE_URL}" ]; then
               code2=""
@@ -77,10 +148,16 @@ jobs:
               if [ "$code2" != "200" ]; then
                 echo "::error::BWM 写入 $key 失败 HTTP $code2（PWM 写入继续，最终 run 标记失败）"
                 fail=1
+              else
+                verify_readback "https://boss.wfspeed.run/api/kv" "$key" "$src" || fail=1
               fi
             else
               echo "skip BWM 双写（未配 BWM_KV_WRITE_TOKEN/BWM_UPDATE_URL）"
             fi
             rm -f /tmp/kv-payload.json
+            if [ "$key" = "avg_prices_full_json" ] && [ "$fail" != "0" ]; then
+              echo "::error::均价写入或回读未通过；跳过后续目录清单发布，保留旧目录作为运行时版本标记" >&2
+              break
+            fi
           done
           if [ "$fail" != "0" ]; then echo "存在 PWM/BWM KV 写入失败，请检查对应令牌与边缘函数部署"; exit 1; fi

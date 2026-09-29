@@ -1,11 +1,11 @@
 """
 全量获取 WM 所有可交易物品均价，算法与 worker.js calcAvg 完全一致。
-使用 /v2/orders/item/{slug}（本地可访问，v1 被 403）。
+使用稳定的 /v2/orders/itemId/{itemId}（slug 只作为产物/前端显示键）。
 v2 字段：type(sell/buy), user.status(ingame/online/offline), visible, platinum
 输出: avg_prices_full.json  格式: { slug: { avg, count, used, total, special,
       avg_zero?, avg_max?, stale? } }  （avg_zero/avg_max 仅可分级物品有，结构同 avg 本身；
       stale=true 表示本次拉不到新数据，沿用了上一次成功统计到的均价兜底）
-支持断点续跑。
+整批成功后才原子替换上一版产物；中断或无完整 stale fallback 时保留旧文件。
 
 口径（2026-08 调整）：
 - 样本 = in-game + online 的卖单合并统计（不再先 ingame 后降级 online）；
@@ -23,15 +23,23 @@ data/avg_prices_full.json，各站（Public-WM 自身 / Ws-Web-item 等）经
 jsDelivr 引用该公库产物。
 """
 import asyncio, json, time, os, random
+from pathlib import Path
+from urllib.parse import quote
 import aiohttp
+from wm_item_identity import (
+    load_json,
+    map_previous_results_by_id,
+    validate_identity_continuity,
+)
 
 DIRECT_URL  = "https://api.warframe.market"
-# 速率策略（每小时全量跑一次，须在 30 分钟内完成）：
-# - 并发 12：3837 个物品约 8~12 分钟，远低于 30 分钟门槛
-# - 随机间隔 0.4~1.0s：并发下的总请求频率 ≈ 12~20 req/s，WM 侧负载适中
+# 速率策略（遵循 WM 当前公开 API 的 3 req/s 上限）：
+# - 并发仅用于隐藏网络等待，不提高请求发起速率；全局 RateLimiter 限制到 3 req/s
+# - 3892 个物品理论最短约 22 分钟；整批超时/中断时保留上次已发布文件
 # - 启动随机延迟 0~3min：错开整点脉冲，但不破坏小时节奏（原 30min 会撞下个整点）
-# - 每 50 个 slug 后额外休息 2~5s
+# - 每 50 个 item 后额外休息 2~5s
 CONCURRENCY   = 12
+MAX_RPS       = 3.0
 MIN_DELAY     = 0.4
 MAX_DELAY     = 1.0
 STARTUP_JITTER_MAX = 3 * 60   # 3min
@@ -47,6 +55,9 @@ OUT_PATH    = _os.environ.get(
     "AVG_PRICES_OUT",
     _os.path.join(_os.path.dirname(__file__), r"..\..\..\..\data\avg_prices_full.json")
 )
+REPO_ROOT = Path(__file__).resolve().parents[2]
+WM_ITEMS_PATH = Path(os.environ.get('WM_ITEMS_PATH', REPO_ROOT / 'data' / 'wm-items.json'))
+IDENTITIES_PATH = Path(os.environ.get('WM_IDENTITIES_OUT', REPO_ROOT / 'data' / 'wm-item-identities.json'))
 
 # 公共只读 API 必须自报身份；WM 官方规则禁止第三方应用伪装浏览器 UA。
 HEADERS = {
@@ -140,6 +151,23 @@ def _backoff_sleep(attempt):
     return min((2 ** attempt) * 5, 120) + random.random() * 5
 
 
+class RateLimiter:
+    """Global request-start limiter; retries consume the same 3 req/s budget."""
+
+    def __init__(self, max_rps):
+        self.interval = 1.0 / max_rps
+        self._lock = asyncio.Lock()
+        self._next = time.monotonic() + self.interval
+
+    async def wait(self):
+        async with self._lock:
+            now = time.monotonic()
+            if now < self._next:
+                await asyncio.sleep(self._next - now)
+                now = time.monotonic()
+            self._next = now + self.interval
+
+
 async def _fetch_items(session):
     """拉取全量物品列表，带指数退避重试。此请求若失败会让整条流水线中断，
     而 warframe.market 偶发超时/5xx，故与单物品抓取一样做重试保护。"""
@@ -160,14 +188,17 @@ async def _fetch_items(session):
             raise
 
 
-async def fetch_slug(session, sem, slug, max_rank, prev_entry):
+async def fetch_item(session, sem, limiter, item, max_rank, prev_entry):
     """单物品抓取：真错误（非 200 / 网络异常）返回 (slug, "ERROR")，
     "0 个卖单"返回 (slug, 结果) 由 compute_avg 内部走 stale 兜底。
     调用方据此把 ERROR 的 slug 加入补跑清单，防止数据缺口。"""
-    url = f"{DIRECT_URL}/v2/orders/item/{slug}"
+    slug = item['slug']
+    item_id = quote(str(item['id']), safe='')
+    url = f"{DIRECT_URL}/v2/orders/itemId/{item_id}"
     async with sem:
         for attempt in range(MAX_RETRIES):
             try:
+                await limiter.wait()
                 async with session.get(
                     url, headers=HEADERS,
                     timeout=aiohttp.ClientTimeout(total=20)
@@ -181,7 +212,12 @@ async def fetch_slug(session, sem, slug, max_rank, prev_entry):
                             continue
                         return slug, "ERROR"
                     data = await r.json(content_type=None)
-                    orders = data.get("data") or []
+                    orders = data.get("data") if isinstance(data, dict) else None
+                    if not isinstance(orders, list):
+                        if attempt < MAX_RETRIES - 1:
+                            await asyncio.sleep(1 + random.random())
+                            continue
+                        return slug, "ERROR"
                     await asyncio.sleep(_jitter_delay())
                     return slug, compute_avg(orders, max_rank, prev_entry)
             except Exception:
@@ -189,12 +225,12 @@ async def fetch_slug(session, sem, slug, max_rank, prev_entry):
     return slug, "ERROR"
 
 
-async def run_pass(session, sem, tasks, prev_results, max_ranks, results, failed, round_no):
+async def run_pass(session, sem, limiter, tasks, prev_results, max_ranks, results, failed, round_no):
     """执行一轮抓取。主循环 round_no=0；补跑轮 round_no>=1 只处理 failed 清单。"""
-    pending = tasks if round_no == 0 else list(failed)
+    pending = tasks if round_no == 0 else [item for item in tasks if item['slug'] in failed]
     if not pending:
         return
-    coros = [fetch_slug(session, sem, slug, max_ranks.get(slug, 0), prev_results.get(slug)) for slug in pending]
+    coros = [fetch_item(session, sem, limiter, item, max_ranks.get(item['slug'], 0), prev_results.get(item['slug'])) for item in pending]
     done = 0
     failed.clear()
     for coro in asyncio.as_completed(coros):
@@ -205,18 +241,6 @@ async def run_pass(session, sem, tasks, prev_results, max_ranks, results, failed
             continue
         if result is not None:
             results[slug] = result
-        if done % 300 == 0:
-            os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
-            if os.environ.get("PRICE_DATA_SECRET"):
-                try:
-                    import crypto_price as _cp
-                    _cp.save_json_encrypt(OUT_PATH, results)
-                except Exception:
-                    with open(OUT_PATH, "w", encoding="utf-8") as f:
-                        json.dump(results, f, ensure_ascii=False, separators=(",", ":"))
-            else:
-                with open(OUT_PATH, "w", encoding="utf-8") as f:
-                    json.dump(results, f, ensure_ascii=False, separators=(",", ":"))
         if done % BATCH_SIZE == 0 and done < len(pending):
             batch_pause = BATCH_PAUSE_MIN + random.random() * (BATCH_PAUSE_MAX - BATCH_PAUSE_MIN)
             await asyncio.sleep(batch_pause)
@@ -235,15 +259,24 @@ async def main():
     async with aiohttp.ClientSession() as session:
         items_data = await _fetch_items(session)
 
-    items  = [it for it in (items_data.get("data") or []) if it.get("slug")]
+    items = (items_data or {}).get("data") or []
+    if not isinstance(items, list):
+        raise RuntimeError("WM item response data is not a list")
+    previous_manifest = load_json(WM_ITEMS_PATH, required=True) if WM_ITEMS_PATH.exists() else {}
+    if previous_manifest and not isinstance(previous_manifest, dict):
+        raise RuntimeError("previous WM item manifest is not an object")
+    previous_items = (previous_manifest or {}).get('data') or []
+    if not isinstance(previous_items, list):
+        raise RuntimeError("previous WM item manifest data is not a list")
+    renames = validate_identity_continuity(previous_items, items)
+    print(f"item ID continuity verified: {len(items)} items, {len(renames)} slug changes")
     slugs  = [it["slug"] for it in items]
     # maxRank>0 才是真正可分级物品（mod/arcane 等）；0 或缺省视为不可分级，不算 avg_zero/avg_max
     max_ranks = {it["slug"]: (it.get("maxRank") or 0) for it in items}
-    print(f"共 {len(slugs)} 个物品，并发={CONCURRENCY}，预估 {len(slugs)*(MIN_DELAY+MAX_DELAY)/2/CONCURRENCY/60:.1f} 分钟")
+    print(f"共 {len(slugs)} 个物品，并发={CONCURRENCY}，限速下理论最短 {len(slugs)/MAX_RPS/60:.1f} 分钟（不含批次停顿与重试）")
 
     # 每次运行都全量重新拉取（不复用上次提交的旧文件作为跳过依据）。
-    # OUT_PATH 仍会每 300 条落盘一次，仅用于本次运行中途意外中断时的进度保护。
-    # 旧文件只用作"这次拉不到卖单/请求失败时"的兜底数据源（见 _apply_stale_fallback）。
+    # 失败前不覆盖已发布清单；旧文件只作为 stale 回退数据源。
     prev_results = {}
     if os.path.exists(OUT_PATH):
         try:
@@ -258,23 +291,35 @@ async def main():
             else:
                 with open(OUT_PATH, "r", encoding="utf-8") as f:
                     prev_results = json.load(f) or {}
-        except Exception:
-            prev_results = {}
+        except Exception as error:
+            raise RuntimeError("previous average-price artifact is unreadable; refusing partial replacement") from error
+    if not isinstance(prev_results, dict):
+        raise RuntimeError("previous average-price artifact is not an object; refusing replacement")
+
+    identity_doc = load_json(IDENTITIES_PATH, required=True) if IDENTITIES_PATH.exists() else {}
+    if identity_doc and not isinstance(identity_doc, dict):
+        raise RuntimeError("previous WM item identity sidecar is not an object")
+    try:
+        prev_results = map_previous_results_by_id(items, prev_results, identity_doc, renames)
+    except ValueError as error:
+        raise RuntimeError("previous item identity sidecar is invalid") from error
 
     results = {}
     failed  = set()
     sem     = asyncio.Semaphore(CONCURRENCY)
+    limiter = RateLimiter(MAX_RPS)
     t0      = time.time()
 
     async with aiohttp.ClientSession() as session:
-        await run_pass(session, sem, slugs, prev_results, max_ranks, results, failed, 0)
+        await run_pass(session, sem, limiter, items, prev_results, max_ranks, results, failed, 0)
         # 真错误补跑：主循环结束后对失败 slug 反复补跑，防止数据缺口
         for rnd in range(1, RETRY_ROUNDS + 1):
             if not failed:
                 break
-            await run_pass(session, sem, slugs, prev_results, max_ranks, results, failed, rnd)
+            await run_pass(session, sem, limiter, items, prev_results, max_ranks, results, failed, rnd)
 
     # 补跑仍失败的：用上一次有效数据兜底，避免该物品直接消失（stale 标记）
+    unrecoverable = []
     for slug in failed:
         prev = prev_results.get(slug)
         if prev and prev.get("avg") is not None:
@@ -283,29 +328,39 @@ async def main():
             results[slug] = carried
             print(f"  兜底 {slug}：沿用上次均价 (stale)")
         else:
-            print(f"  无兜底数据 {slug}：维持无均价")
+            unrecoverable.append(slug)
+    if unrecoverable:
+        raise RuntimeError(
+            "average-price refresh has %d request failures without a stale fallback; "
+            "keeping the last published artifact (examples: %s)" %
+            (len(unrecoverable), ', '.join(unrecoverable[:8]))
+        )
 
     elapsed = time.time() - t0
     has_avg = sum(1 for v in results.values() if v.get("avg"))
     print(f"\n完成！均价:{has_avg}  共:{len(results)}/{len(slugs)}  耗时:{elapsed/60:.1f} 分钟")
+    if set(results) != set(slugs):
+        raise RuntimeError("average-price result set is incomplete; keeping last published artifact")
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
+    temporary_path = OUT_PATH + ".tmp"
     if os.environ.get("PRICE_DATA_SECRET"):
         try:
             import crypto_price as _cp
-            _cp.save_json_encrypt(OUT_PATH, results)
-            kb = os.path.getsize(OUT_PATH) // 1024
+            _cp.save_json_encrypt(temporary_path, results)
+            kb = os.path.getsize(temporary_path) // 1024
             print(f"已保存(加密) {OUT_PATH}  ({kb} KB)")
         except Exception as e:
             print(f"WARN 加密失败回退明文: {e}")
-            with open(OUT_PATH, "w", encoding="utf-8") as f:
+            with open(temporary_path, "w", encoding="utf-8") as f:
                 json.dump(results, f, ensure_ascii=False, separators=(",", ":"))
-            kb = os.path.getsize(OUT_PATH) // 1024
+            kb = os.path.getsize(temporary_path) // 1024
             print(f"已保存 {OUT_PATH}  ({kb} KB)")
     else:
-        with open(OUT_PATH, "w", encoding="utf-8") as f:
+        with open(temporary_path, "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, separators=(",", ":"))
-        kb = os.path.getsize(OUT_PATH) // 1024
+        kb = os.path.getsize(temporary_path) // 1024
         print(f"已保存 {OUT_PATH}  ({kb} KB)")
+    os.replace(temporary_path, OUT_PATH)
 
 
 if __name__ == "__main__":

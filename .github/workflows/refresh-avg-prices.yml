@@ -2,7 +2,8 @@ name: 刷新全量均价数据
 
 # 每小时从 WM v2 API 重新拉取全量均价，覆盖 data/avg_prices_full.json。
 # 脚本已入库（.github/scripts/fetch_avg_prices.py，由 Private-WM/Ws-Web-core
-# 迁移而来），并发 12 + 0.4~1.0s 间隔，单次约 8~12 分钟，远低于 1 小时周期。
+# 迁移而来）；并发只隐藏网络等待，请求发起由全局 limiter 限制为最多 3 req/s。
+# 全量采集通常至少约 22 分钟，另含批次停顿、重试与启动抖动；超时不覆盖上一版。
 # 产物提交到 Public-WM 仓库 main 分支后，各消费端经 jsDelivr 引用：
 #   https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/avg_prices_full.json
 # 腾讯云 Pages 的 GitHub 集成监听 main 分支 push，会自动触发静态站点重新构建。
@@ -14,11 +15,12 @@ on:
 
 concurrency:
   group: refresh-avg-prices
-  cancel-in-progress: true   # 上一轮未跑完时直接取消，避免积压排队
+  cancel-in-progress: false  # 保留已发布快照；同一物品目录触发的刷新不得取消正在运行的批次
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    timeout-minutes: 55
     permissions:
       contents: write
     steps:
@@ -26,6 +28,9 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 1
+
+      - name: 测试 item ID 连续性与 slug alias
+        run: python3 -m unittest discover -s tests -p 'test_wm_item_identity.py' -v
 
       - name: 安装依赖
         run: pip install aiohttp cryptography -q

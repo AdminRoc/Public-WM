@@ -11,6 +11,12 @@
 jsDelivr 最新产物而非 Pages 部署快照，避免手动低频部署导致数据过时。
 """
 import json, os, urllib.request
+from wm_item_identity import (
+    build_identity_manifest,
+    load_json,
+    validate_identity_continuity,
+    write_json_atomic,
+)
 
 DIRECT = "https://api.warframe.market"
 
@@ -28,6 +34,10 @@ OUT = os.environ.get(
     "WM_ITEMS_OUT",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "data", "wm-items.json"),
 )
+IDENTITIES_OUT = os.environ.get(
+    "WM_IDENTITIES_OUT",
+    os.path.join(os.path.dirname(os.path.abspath(OUT)), "wm-item-identities.json"),
+)
 
 
 def fetch_items():
@@ -39,15 +49,15 @@ def fetch_items():
 def main():
     j = fetch_items()
     raw = (j or {}).get("data") or []
+    if not isinstance(raw, list):
+        raise RuntimeError("WM item response data is not a list")
     items = []
     for it in raw:
-        if not it.get("id"):
-            continue
         i18n = it.get("i18n") or {}
         en = (i18n.get("en") or {}).get("name") or it.get("slug")
         zh_api = (i18n.get("zh-hans") or {}).get("name")
         items.append({
-            "id":            it["id"],
+            "id":            it.get("id"),
             "slug":          it.get("slug"),
             "zh":            zh_api or en,
             "en":            en,
@@ -63,20 +73,28 @@ def main():
             "rarity":        it.get("rarity") or None,
             "tradingTax":    it.get("trading_tax") or None,
         })
-    slugs = [it.get("slug") for it in items]
-    if len(items) < 1500 or any(not slug for slug in slugs) or len(set(slugs)) != len(slugs):
-        raise RuntimeError("WM item manifest is incomplete or has duplicate slugs")
-    if os.path.exists(OUT):
-        with open(OUT, encoding="utf-8") as f:
-            previous = json.load(f).get("data") or []
-        missing = {it["slug"] for it in previous if it.get("slug")} - set(slugs)
-        if missing:
-            raise RuntimeError(f"WM item manifest lost {len(missing)} published slugs; keeping previous data")
+    previous_doc = load_json(OUT, required=True) if os.path.exists(OUT) else {}
+    if previous_doc and not isinstance(previous_doc, dict):
+        raise RuntimeError("previous WM item manifest is not an object; keeping previous data")
+    previous = (previous_doc or {}).get("data") or []
+    if not isinstance(previous, list):
+        raise RuntimeError("previous WM item manifest data is not a list; keeping previous data")
+    identity_path = IDENTITIES_OUT
+    previous_identity = load_json(identity_path, required=True) if os.path.exists(identity_path) else {}
+    if previous_identity and not isinstance(previous_identity, dict):
+        raise RuntimeError("previous WM item identity sidecar is not an object; keeping previous data")
+    try:
+        renames = validate_identity_continuity(previous, items)
+        identity_manifest = build_identity_manifest(items, previous, previous_identity, renames)
+    except ValueError as error:
+        raise RuntimeError("WM item identity validation failed; keeping previous data: %s" % error) from error
+    if renames:
+        print("已验证 %d 个 slug 变更对应原有稳定 item id" % len(renames))
 
     out_dir = os.path.dirname(os.path.abspath(OUT))
     os.makedirs(out_dir, exist_ok=True)
-    with open(OUT, "w", encoding="utf-8") as f:
-        json.dump({"data": items}, f, ensure_ascii=False, separators=(",", ":"))
+    write_json_atomic(OUT, {"data": items})
+    write_json_atomic(identity_path, identity_manifest)
     kb = os.path.getsize(OUT) // 1024
     print(f"已保存 {OUT} ({len(items)} 项, {kb} KB)")
 

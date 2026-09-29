@@ -13,30 +13,35 @@ on:
 
 concurrency:
   group: harvest-wm-items
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   harvest:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
+      - name: 测试 item ID 连续性与 slug alias
+        run: python3 -m unittest discover -s tests -p 'test_wm_item_identity.py' -v
+
       - name: 拉取物品总表
         run: python3 .github/scripts/harvest_wm_items.py
         env:
           WM_ITEMS_OUT: data/wm-items.json
+          WM_IDENTITIES_OUT: data/wm-item-identities.json
 
       - name: 提交并推送
         id: commit
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/wm-items.json
+          git add data/wm-items.json data/wm-item-identities.json
           if git diff --staged --quiet; then
             echo "无变动，跳过提交"
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -48,13 +53,10 @@ jobs:
               echo "changed=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            cp data/wm-items.json /tmp/wm-items.json
-            git rebase --abort 2>/dev/null || true
-            git fetch origin main
-            git reset --hard origin/main
-            cp /tmp/wm-items.json data/wm-items.json
-            git add data/wm-items.json
-            git commit -m "data: refresh wm-items.json [skip ci]"
+            if ! git pull --rebase origin main; then
+              echo "无法在远端更新后安全重放物品产物" >&2
+              exit 1
+            fi
             sleep "$(( (RANDOM % 4) + 2 ))"
           done
           exit 1
@@ -64,3 +66,10 @@ jobs:
         if: steps.commit.outputs.changed == 'true'
         run: |
           curl -s "https://purge.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/wm-items.json" || true
+          curl -s "https://purge.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/wm-item-identities.json" || true
+
+      - name: 新物品版本触发均价与 PWM/BWM 发布
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run .github/workflows/refresh-avg-prices.yml --repo AdminRoc/Public-WM --ref main
