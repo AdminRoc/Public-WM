@@ -50,13 +50,13 @@ jobs:
               echo "changed=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            cp data/auction-dicts.json /tmp/auction-dicts.json
-            git rebase --abort 2>/dev/null || true
+            echo "Push rejected on attempt $i; fetching main and rebasing the generated auction-dictionary commit."
             git fetch origin main
-            git reset --hard origin/main
-            cp /tmp/auction-dicts.json data/auction-dicts.json
-            git add data/auction-dicts.json
-            git commit -m "data: refresh auction-dicts.json [skip ci]"
+            if ! git rebase origin/main; then
+              git rebase --abort 2>/dev/null || true
+              echo "::error::Auction dictionary conflicts with a newer main revision; no overwrite or publication was attempted."
+              exit 1
+            fi
             sleep "$(( (RANDOM % 4) + 2 ))"
           done
           exit 1

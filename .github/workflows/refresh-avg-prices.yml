@@ -77,13 +77,13 @@ jobs:
               echo "changed=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            cp data/avg_prices_full.json /tmp/avg_prices_full.json
-            git rebase --abort 2>/dev/null || true
+            echo "Push rejected on attempt $i; fetching main and rebasing the generated average-price commit."
             git fetch origin main
-            git reset --hard origin/main
-            cp /tmp/avg_prices_full.json data/avg_prices_full.json
-            git add data/avg_prices_full.json
-            git commit -m "data: refresh avg_prices_full.json [skip ci]"
+            if ! git rebase origin/main; then
+              git rebase --abort 2>/dev/null || true
+              echo "::error::Average-price output conflicts with a newer main revision; no overwrite or publication was attempted."
+              exit 1
+            fi
             sleep "$(( (RANDOM % 4) + 2 ))"
           done
           exit 1
