@@ -26,20 +26,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          fetch-depth: 1
+          fetch-depth: 2
           ref: main
 
       - name: 安装加密数据回读校验依赖
         run: pip install cryptography -q
+
+      - name: 测试 KV 发布的稳定 ID 连续性保护
+        run: python3 -m unittest discover -s tests -p 'test_wm_item_identity.py' -v
 
       - name: 发布前核对物品清单与均价覆盖范围
         env:
           PRICE_DATA_SECRET: ${{ secrets.PRICE_DATA_SECRET }}
         run: |
           python3 - <<'PY'
-          import json, pathlib, sys
+          import json, pathlib, subprocess, sys
           sys.path.insert(0, '.github/scripts')
           import crypto_price
+          from wm_item_identity import validate_published_manifest_continuity
           items_doc = json.loads(pathlib.Path('data/wm-items.json').read_text(encoding='utf-8'))
           items = items_doc.get('data')
           prices = crypto_price.load_json('data/avg_prices_full.json')
@@ -53,10 +57,21 @@ jobs:
               raise SystemExit('current WM item manifest has missing or duplicate slugs')
           if any(not item_id for item_id in ids) or len(set(ids)) != len(ids):
               raise SystemExit('current WM item manifest has missing or duplicate stable IDs')
+          try:
+              parent_raw = subprocess.run(
+                  ['git', 'show', 'HEAD^:data/wm-items.json'],
+                  check=True, capture_output=True, text=True, encoding='utf-8',
+              ).stdout
+              previous_doc = json.loads(parent_raw)
+              renames = validate_published_manifest_continuity(previous_doc, items_doc)
+          except (subprocess.CalledProcessError, json.JSONDecodeError, ValueError) as error:
+              raise SystemExit(
+                  'WM item release does not preserve parent stable identities; refusing KV publication'
+              ) from error
           missing = set(slugs) - set(prices)
           if missing:
               raise SystemExit('average-price artifact does not cover the current WM item manifest')
-          print(f'KV release preflight passed: {len(slugs)} current items covered by averages')
+          print(f'KV release preflight passed: {len(slugs)} current items, {len(renames)} stable-ID slug changes, averages complete')
           PY
 
       - name: 写入 EdgeOne KV（双写：PWM_KV + BWM_KV 省 Private 私库 Action）

@@ -7,6 +7,7 @@ from wm_item_identity import (
     build_identity_manifest,
     map_previous_results_by_id,
     validate_identity_continuity,
+    validate_published_manifest_continuity,
 )
 
 
@@ -38,6 +39,25 @@ class WmItemIdentityTests(unittest.TestCase):
         current = [{'id': 'new-id', 'slug': 'new_slug', 'en': 'Item'}]
         with self.assertRaisesRegex(ValueError, 'lost 1 published identities'):
             validate_identity_continuity(previous, current, minimum=1)
+
+    def test_kv_release_preflight_allows_slug_rename_for_same_stable_id(self):
+        previous = {'data': [{'id': 'id-1', 'slug': 'old_slug', 'en': 'Old Name'}]}
+        current = {'data': [{'id': 'id-1', 'slug': 'new_slug', 'en': 'New Name'}]}
+        self.assertEqual(
+            validate_published_manifest_continuity(previous, current, minimum=1),
+            {'old_slug': 'new_slug'},
+        )
+
+    def test_kv_release_preflight_rejects_lost_stable_id(self):
+        previous = {'data': [{'id': 'old-id', 'slug': 'old_slug', 'en': 'Item'}]}
+        current = {'data': [{'id': 'new-id', 'slug': 'new_slug', 'en': 'Item'}]}
+        with self.assertRaisesRegex(ValueError, 'lost 1 published identities'):
+            validate_published_manifest_continuity(previous, current, minimum=1)
+
+    def test_kv_release_preflight_rejects_missing_parent_baseline(self):
+        current = {'data': [{'id': 'id-1', 'slug': 'slug', 'en': 'Item'}]}
+        with self.assertRaisesRegex(ValueError, 'parent WM item manifest is missing or empty'):
+            validate_published_manifest_continuity({}, current, minimum=1)
 
     def test_previous_prices_follow_identity_to_current_slug(self):
         current = [{'id': 'id-1', 'slug': 'new_slug', 'en': 'Item'}]

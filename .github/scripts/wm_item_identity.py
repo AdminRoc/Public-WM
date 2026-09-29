@@ -76,6 +76,19 @@ def validate_identity_continuity(previous_items, current_items, minimum=1500):
     return renames
 
 
+def validate_published_manifest_continuity(previous_doc, current_doc, minimum=1500):
+    """Validate that a KV release keeps every identity in the parent manifest."""
+    if not isinstance(previous_doc, dict) or not isinstance(current_doc, dict):
+        raise ValueError('WM item release manifests must be JSON objects')
+    previous_items = previous_doc.get('data')
+    current_items = current_doc.get('data')
+    if not isinstance(previous_items, list) or not previous_items:
+        raise ValueError('parent WM item manifest is missing or empty')
+    if not isinstance(current_items, list) or not current_items:
+        raise ValueError('current WM item manifest is missing or empty')
+    return validate_identity_continuity(previous_items, current_items, minimum=minimum)
+
+
 def build_identity_manifest(current_items, previous_items, previous_identity, renames):
     previous_by_id = {str(item.get('id')): item for item in (previous_items or []) if item.get('id')}
     old_slug_by_current = {new: old for old, new in renames.items()}
