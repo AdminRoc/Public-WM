@@ -78,10 +78,9 @@ jobs:
               exit 0
             fi
             echo "Push rejected on attempt $i; fetching main and rebasing the generated average-price commit."
-            git fetch origin main
-            if ! git rebase origin/main; then
+            if ! git pull --rebase origin main; then
               git rebase --abort 2>/dev/null || true
-              echo "::error::Average-price output conflicts with a newer main revision; no overwrite or publication was attempted."
+              echo "::error::Could not safely rebase average-price output onto main; no overwrite or publication was attempted."
               exit 1
             fi
             sleep "$(( (RANDOM % 4) + 2 ))"
