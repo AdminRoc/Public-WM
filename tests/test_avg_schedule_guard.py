@@ -39,12 +39,28 @@ class AverageScheduleGuardTests(unittest.TestCase):
 
     @patch('avg_schedule_guard.api_json')
     def test_latest_success_is_selected_even_after_a_failed_run(self, api_json):
-        api_json.return_value = {'workflow_runs': [
-            {'conclusion': 'failure', 'updated_at': '2026-10-01T11:59:00Z'},
-            {'conclusion': 'success', 'updated_at': '2026-10-01T11:30:00Z'},
-        ]}
+        api_json.side_effect = [
+            {'workflow_runs': [
+                {'id': 42, 'conclusion': 'failure', 'updated_at': '2026-10-01T11:59:00Z'},
+                {'id': 41, 'conclusion': 'success', 'updated_at': '2026-10-01T11:30:00Z'},
+            ]},
+            {'jobs': [{'name': 'refresh', 'conclusion': 'success'}]},
+        ]
         result = latest_successful_run('AdminRoc/Public-WM', 'https://api.github.com', 'test')
-        self.assertEqual(result['conclusion'], 'success')
+        self.assertEqual(result['id'], 41)
+
+    @patch('avg_schedule_guard.api_json')
+    def test_green_workflow_with_skipped_refresh_is_not_a_successful_scrape(self, api_json):
+        api_json.side_effect = [
+            {'workflow_runs': [
+                {'id': 42, 'conclusion': 'success', 'updated_at': '2026-10-01T11:45:00Z'},
+                {'id': 41, 'conclusion': 'success', 'updated_at': '2026-10-01T11:30:00Z'},
+            ]},
+            {'jobs': [{'name': 'refresh', 'conclusion': 'skipped'}]},
+            {'jobs': [{'name': 'refresh', 'conclusion': 'success'}]},
+        ]
+        result = latest_successful_run('AdminRoc/Public-WM', 'https://api.github.com', 'test')
+        self.assertEqual(result['id'], 41)
 
     @patch('avg_schedule_guard.api_json')
     def test_malformed_run_list_fails_closed(self, api_json):

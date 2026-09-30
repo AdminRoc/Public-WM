@@ -58,15 +58,31 @@ def api_json(url: str, token: str) -> dict:
 
 
 def latest_successful_run(repository: str, api_url: str, token: str) -> dict | None:
-    url = (
-        f"{api_url.rstrip('/')}/repos/{repository}/actions/workflows/"
-        f"{WORKFLOW_FILE}/runs?status=completed&per_page=30"
+    base = f"{api_url.rstrip('/')}/repos/{repository}/actions"
+    document = api_json(
+        f"{base}/workflows/{WORKFLOW_FILE}/runs?status=completed&per_page=30", token
     )
-    document = api_json(url, token)
     runs = document.get("workflow_runs") if isinstance(document, dict) else None
     if not isinstance(runs, list) or any(not isinstance(run, dict) for run in runs):
         raise ValueError("GitHub Actions API returned an invalid workflow-run list")
-    return next((run for run in runs if run.get("conclusion") == "success"), None)
+    for run in runs:
+        if run.get("conclusion") != "success":
+            continue
+        run_id = run.get("id")
+        if not isinstance(run_id, int):
+            raise ValueError("successful workflow run has no valid ID")
+        jobs_document = api_json(
+            f"{base}/runs/{run_id}/jobs?per_page=100", token
+        )
+        jobs = jobs_document.get("jobs") if isinstance(jobs_document, dict) else None
+        if not isinstance(jobs, list) or any(not isinstance(job, dict) for job in jobs):
+            raise ValueError("GitHub Actions API returned an invalid job list")
+        refresh_job = next((job for job in jobs if job.get("name") == "refresh"), None)
+        if refresh_job and refresh_job.get("conclusion") == "success":
+            return run
+        # A green workflow with its refresh job skipped is a gate result, not a
+        # successful scrape. Continue to find the last actual producer success.
+    return None
 
 
 def write_output(run_capture: bool) -> int:
