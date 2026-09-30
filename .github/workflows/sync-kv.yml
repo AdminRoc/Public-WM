@@ -19,9 +19,37 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  sync:
+  sync_gate:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      do_sync: ${{ steps.gate.outputs.do_sync }}
+    steps:
+      - name: Checkout workflow-run guard
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          ref: main
+          sparse-checkout: |
+            .github/scripts
+      - name: Require a successful producer job
+        id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          PARENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          PARENT_WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          PARENT_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: python3 .github/scripts/sync_run_guard.py
+
+  sync:
+    needs: sync_gate
+    if: needs.sync_gate.outputs.do_sync == 'true'
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
