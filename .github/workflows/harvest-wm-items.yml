@@ -9,7 +9,7 @@ name: 刷新物品总表
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */2 * * *'   # 每2小时（最慢2h，满足 Private 私库无Action 约束）
+    - cron: '11 */2 * * *'  # 错开整点调度高峰，仍每2小时刷新
 
 concurrency:
   group: harvest-wm-items
