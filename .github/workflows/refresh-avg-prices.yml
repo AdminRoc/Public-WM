@@ -12,13 +12,41 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '30 * * * *'   # 每小时第 30 分钟触发，脚本内另有 0~3min 随机延迟
+    - cron: '0,15,45 * * * *' # 错开 :30 主时点的 stale-only 补偿检查
 
 concurrency:
   group: refresh-avg-prices
   cancel-in-progress: false  # 保留已发布快照；同一物品目录触发的刷新不得取消正在运行的批次
 
 jobs:
+  schedule_guard:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      run_capture: ${{ steps.guard.outputs.run_capture }}
+    steps:
+      - name: Checkout schedule guard
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          ref: main
+          sparse-checkout: |
+            .github/scripts
+      - name: Gate scheduled capture on last successful refresh
+        id: guard
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          MIN_AGE_MINUTES: "45"
+        run: python3 .github/scripts/avg_schedule_guard.py
+
   refresh:
+    needs: schedule_guard
+    if: needs.schedule_guard.outputs.run_capture == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 55
     permissions:
