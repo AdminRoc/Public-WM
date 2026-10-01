@@ -8,6 +8,12 @@ name: 刷新物品总表
 
 on:
   workflow_dispatch:
+    inputs:
+      cf_schedule_fallback:
+        description: Mark as the hourly Cloudflare schedule fallback
+        type: boolean
+        required: false
+        default: false
   schedule:
     - cron: '11 */2 * * *'  # 错开整点调度高峰，仍每2小时刷新
 
@@ -16,7 +22,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  schedule_guard:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      run_capture: ${{ steps.guard.outputs.run_capture }}
+    steps:
+      - name: Checkout catalog freshness guard
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 1
+          sparse-checkout: .github/scripts
+      - name: Gate periodic catalog fetches on last complete harvest
+        id: guard
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          CF_SCHEDULE_FALLBACK: ${{ github.event.inputs.cf_schedule_fallback }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          MIN_AGE_MINUTES: "110"
+        run: python3 .github/scripts/wm_items_schedule_guard.py
+
   harvest:
+    needs: schedule_guard
+    if: needs.schedule_guard.outputs.run_capture == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write

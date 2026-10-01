@@ -1,4 +1,4 @@
-"""Avoid duplicate scheduled WM average scrapes while recovering missed slots."""
+"""Avoid repeated Public-WM catalog fetches while the last complete catalog is fresh."""
 
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
-WORKFLOW_FILE = "refresh-avg-prices.yml"
+WORKFLOW_FILE = "harvest-wm-items.yml"
+PRODUCER_JOB = "harvest"
 
 
 def parse_utc(value: str) -> datetime:
@@ -20,7 +21,7 @@ def parse_utc(value: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-def should_run_capture(
+def should_run_harvest(
     event_name: str,
     latest_success: dict | None,
     now: datetime,
@@ -29,20 +30,18 @@ def should_run_capture(
 ) -> tuple[bool, str]:
     fallback_enabled = cf_schedule_fallback is True or str(cf_schedule_fallback).strip().lower() == "true"
     if event_name != "schedule" and not fallback_enabled:
-        return True, f"{event_name} run bypasses the scheduled freshness gate"
+        return True, f"{event_name} manual run bypasses the periodic freshness gate"
     if latest_success is None:
-        return True, "no successful refresh run found; allow scheduled recovery"
-
+        return True, "no completed catalog harvest success found; allow recovery"
     completed_at = latest_success.get("updated_at") or latest_success.get("completed_at")
     if not completed_at:
-        raise ValueError("latest successful refresh has no completion timestamp")
+        raise ValueError("latest successful catalog harvest has no completion timestamp")
     age = now.astimezone(timezone.utc) - parse_utc(completed_at)
     if age < -timedelta(minutes=5):
-        raise ValueError("latest successful refresh completion is unexpectedly in the future")
+        raise ValueError("latest successful catalog harvest is unexpectedly in the future")
     if age < min_age:
-        age_minutes = max(0, int(age.total_seconds() // 60))
-        return False, f"last successful refresh is only {age_minutes} minutes old"
-    return True, f"last successful refresh is at least {int(min_age.total_seconds() // 60)} minutes old"
+        return False, f"last complete catalog harvest is only {max(0, int(age.total_seconds() // 60))} minutes old"
+    return True, f"last complete catalog harvest is at least {int(min_age.total_seconds() // 60)} minutes old"
 
 
 def api_json(url: str, token: str) -> dict:
@@ -52,14 +51,14 @@ def api_json(url: str, token: str) -> dict:
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "Public-WM-average-schedule-guard",
+            "User-Agent": "Public-WM-item-schedule-guard",
         },
     )
     with urlopen(request, timeout=20) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
-def latest_successful_run(repository: str, api_url: str, token: str) -> dict | None:
+def latest_successful_harvest(repository: str, api_url: str, token: str) -> dict | None:
     base = f"{api_url.rstrip('/')}/repos/{repository}/actions"
     document = api_json(
         f"{base}/workflows/{WORKFLOW_FILE}/runs?status=completed&per_page=30", token
@@ -68,22 +67,21 @@ def latest_successful_run(repository: str, api_url: str, token: str) -> dict | N
     if not isinstance(runs, list) or any(not isinstance(run, dict) for run in runs):
         raise ValueError("GitHub Actions API returned an invalid workflow-run list")
     for run in runs:
-        if run.get("conclusion") != "success":
-            continue
         run_id = run.get("id")
         if not isinstance(run_id, int):
-            raise ValueError("successful workflow run has no valid ID")
-        jobs_document = api_json(
-            f"{base}/runs/{run_id}/jobs?per_page=100", token
-        )
+            raise ValueError("completed workflow run has no valid ID")
+        jobs_document = api_json(f"{base}/runs/{run_id}/jobs?per_page=100", token)
         jobs = jobs_document.get("jobs") if isinstance(jobs_document, dict) else None
         if not isinstance(jobs, list) or any(not isinstance(job, dict) for job in jobs):
             raise ValueError("GitHub Actions API returned an invalid job list")
-        refresh_job = next((job for job in jobs if job.get("name") == "refresh"), None)
-        if refresh_job and refresh_job.get("conclusion") == "success":
+        harvest = next((job for job in jobs if job.get("name") == PRODUCER_JOB), None)
+        if harvest is None:
+            raise ValueError("completed workflow run is missing the harvest producer job")
+        if run.get("conclusion") == "success" and harvest.get("conclusion") == "success":
             return run
-        # A green workflow with its refresh job skipped is a gate result, not a
-        # successful scrape. Continue to find the last actual producer success.
+        if harvest.get("conclusion") in {"failure", "cancelled", "timed_out", "action_required"}:
+            return None
+        # Skips from a successful freshness gate are not new catalog data.
     return None
 
 
@@ -100,36 +98,30 @@ def write_output(run_capture: bool) -> int:
 def main() -> int:
     event_name = os.environ.get("EVENT_NAME", "")
     fallback_input = os.environ.get("CF_SCHEDULE_FALLBACK", "false")
-    fallback_enabled = fallback_input.strip().lower() == "true"
-    if event_name != "schedule" and not fallback_enabled:
-        print(f"run_capture=true ({event_name or 'unknown'} run bypasses schedule gate)")
+    if event_name != "schedule" and fallback_input.strip().lower() != "true":
+        print(f"run_capture=true ({event_name or 'unknown'} manual run bypasses freshness gate)")
         return write_output(True)
-
     token = os.environ.get("GH_TOKEN", "")
     repository = os.environ.get("GITHUB_REPOSITORY", "")
     api_url = os.environ.get("GITHUB_API_URL", "https://api.github.com")
-    if not token or not repository:
-        print("::error::Schedule freshness gate is missing GitHub API configuration")
-        return 1
-
     try:
-        latest = latest_successful_run(repository, api_url, token)
-        min_age = timedelta(minutes=int(os.environ.get("MIN_AGE_MINUTES", "45")))
+        min_age = timedelta(minutes=int(os.environ.get("MIN_AGE_MINUTES", "0")))
         if min_age <= timedelta(0):
             raise ValueError("MIN_AGE_MINUTES must be positive")
-        run_capture, reason = should_run_capture(
+        if not token or not repository:
+            raise ValueError("GitHub Actions API configuration is incomplete")
+        latest = latest_successful_harvest(repository, api_url, token)
+        run_capture, reason = should_run_harvest(
             event_name, latest, datetime.now(timezone.utc), min_age, fallback_input
         )
     except (HTTPError, URLError, TimeoutError, OSError, ValueError, KeyError, TypeError) as error:
-        # Uncertain GitHub state must not launch another full upstream collection.
-        print(f"::error::Could not verify the last average refresh ({type(error).__name__})")
+        print(f"::error::Could not verify the last catalog harvest ({type(error).__name__})")
         return 1
-
     print(f"run_capture={str(run_capture).lower()} ({reason})")
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not run_capture and summary_path:
         with open(summary_path, "a", encoding="utf-8") as summary:
-            summary.write(f"### Scheduled Public-WM refresh skipped\n\n{reason}.\n")
+            summary.write(f"### Scheduled Public-WM catalog run skipped\n\n{reason}.\n")
     return write_output(run_capture)
 
 

@@ -17,6 +17,14 @@ class AverageScheduleGuardTests(unittest.TestCase):
         run, _ = should_run_capture('workflow_dispatch', None, self.now, self.window)
         self.assertTrue(run)
 
+    def test_flagged_cloudflare_dispatch_obeys_freshness_gate(self):
+        latest = {'updated_at': '2026-10-01T11:30:00Z'}
+        run, reason = should_run_capture(
+            'workflow_dispatch', latest, self.now, self.window, 'true'
+        )
+        self.assertFalse(run)
+        self.assertIn('30 minutes old', reason)
+
     def test_no_successful_run_allows_scheduled_recovery(self):
         run, _ = should_run_capture('schedule', None, self.now, self.window)
         self.assertTrue(run)

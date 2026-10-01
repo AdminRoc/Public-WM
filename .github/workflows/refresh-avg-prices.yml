@@ -1,6 +1,6 @@
 name: 刷新全量均价数据
 
-# 每小时从 WM v2 API 重新拉取全量均价，覆盖 data/avg_prices_full.json。
+# 按小时从 WM v2 API 重新拉取全量均价，覆盖 data/avg_prices_full.json。
 # 脚本已入库（.github/scripts/fetch_avg_prices.py，由 Private-WM/Ws-Web-core
 # 迁移而来）；并发只隐藏网络等待，请求发起由全局 limiter 限制为最多 3 req/s。
 # 全量采集通常至少约 22 分钟，另含批次停顿、重试与启动抖动；超时不覆盖上一版。
@@ -10,6 +10,12 @@ name: 刷新全量均价数据
 
 on:
   workflow_dispatch:
+    inputs:
+      cf_schedule_fallback:
+        description: Mark as the hourly Cloudflare schedule fallback
+        type: boolean
+        required: false
+        default: false
   schedule:
     - cron: '30 * * * *'   # 每小时第 30 分钟触发，脚本内另有 0~3min 随机延迟
     - cron: '0,15,45 * * * *' # 错开 :30 主时点的 stale-only 补偿检查
@@ -38,6 +44,7 @@ jobs:
         id: guard
         env:
           EVENT_NAME: ${{ github.event_name }}
+          CF_SCHEDULE_FALLBACK: ${{ github.event.inputs.cf_schedule_fallback }}
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_API_URL: ${{ github.api_url }}
