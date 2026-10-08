@@ -187,6 +187,24 @@ const ATTR_ZH = {
   'critical_chance_on_slide_attack':  '滑行攻击暴击率',
   'chance_to_gain_extra_combo_count': '额外连击数获取',
   'chance_to_gain_combo_count':       '的几率来获得连击数',
+  'ammo_efficiency':                  '弹药效率',
+  'blast':                            '爆炸伤害',
+  'corrosive':                        '腐蚀伤害',
+  'damage_to_orokin':                 '对奥罗金的伤害',
+  'damage_to_scaldra':                '对炽蛇军的伤害',
+  'damage_to_techrot':                '对科腐者的伤害',
+  'gas':                              '毒气伤害',
+  'heavy_attack_wind_up_speed':       '重击准备速度',
+  'magazine_reloaded_s_when_holstered': '收起武器时弹匣每秒自动装填',
+  'magnetic':                         '磁力伤害',
+  'melee_damage_on_heavy_attack':     '在重击时的近战伤害',
+  'parry_angle':                     '招架角度',
+  'radiation':                       '辐射伤害',
+  'slam_attack_damage':              '震地攻击伤害',
+  'status_damage':                   '异常状态伤害',
+  'viral':                           '病毒伤害',
+  'weak_point_critical_chance':      '弱点暴击几率',
+  'weak_point_damage':               '弱点伤害',
 };
 
 /* ── 字典加载 ── */
@@ -221,16 +239,52 @@ async function loadDict(name) {
   return map;
 }
 
+function rivenWeaponType(weaponSlug) {
+  if (!weaponSlug) return '';
+  const weapon = (_dictArr['riven/weapons'] || []).find(function(it) { return it.slug === weaponSlug; });
+  return weapon && weapon.rivenType || '';
+}
+
+function isRivenAttributeEligible(attr, positive, weaponSlug) {
+  if (!attr || (positive && attr.negativeOnly === true) || (!positive && attr.positiveOnly === true)) return false;
+  const exclusiveTo = Array.isArray(attr.exclusiveTo) ? attr.exclusiveTo : [];
+  const weaponType = rivenWeaponType(weaponSlug);
+  return !exclusiveTo.length || !weaponType || exclusiveTo.indexOf(weaponType) !== -1;
+}
+
+function rivenAttributeCandidates(positive, weaponSlug) {
+  return (_dictArr['riven/attributes'] || []).filter(function(attr) {
+    return isRivenAttributeEligible(attr, positive, weaponSlug);
+  });
+}
+
+function clearIneligibleRivenAttributeSelections(fields, weaponSlug) {
+  fields.forEach(function(field) {
+    const input = document.getElementById(field.id);
+    const slug = input && input.dataset.slug;
+    if (!slug || !_isRealRivenAttr(slug)) return;
+    const attr = (_dicts['riven/attributes'] || {})[slug];
+    if (isRivenAttributeEligible(attr, field.positive, weaponSlug)) return;
+    input.dataset.slug = '';
+    input.value = '';
+    if (field.valueId) {
+      const valueInput = document.getElementById(field.valueId);
+      if (valueInput) valueInput.value = '';
+    }
+  });
+}
+
 /* ══════════════════════════════════════════════════════
    自动补全组件
    每个 ac 字段由 <input data-slug=""> + <div.bw-ac-drop> 组成。
    选中后 data-slug 记录实际 slug，input.value 显示当前语言名。
    ══════════════════════════════════════════════════════ */
 
-function initAc(inputId, getArr, allowEmpty) {
+function initAc(inputId, getArr, allowEmpty, onPick, maxItems) {
   var input = document.getElementById(inputId);
   var drop  = document.getElementById(inputId + '-drop');
   if (!input || !drop) return;
+  var optionLimit = maxItems || 50;
 
   /* .bw-tr-panel 有 transform + overflow:hidden，会破坏 fixed 定位。
      把 drop 移到 body 最底部，彻底脱离任何 transform 上下文。 */
@@ -247,7 +301,8 @@ function initAc(inputId, getArr, allowEmpty) {
   }
 
   function showItems(arr) {
-    var items = allowEmpty ? [{ slug: '', _empty: true }].concat(arr.slice(0, 50)) : arr.slice(0, 50);
+    var options = arr.slice(0, optionLimit);
+    var items = allowEmpty ? [{ slug: '', _empty: true }].concat(options) : options;
     if (!items.length) { drop.style.display = 'none'; return; }
     drop.innerHTML = items.map(function(it) {
       return '<div class="bw-ac-item" data-slug="' + _escHtml(it.slug || '') + '">'
@@ -262,6 +317,7 @@ function initAc(inputId, getArr, allowEmpty) {
         input.dataset.slug = slug;
         input.value = slug ? el.textContent : '';
         drop.style.display = 'none';
+        if (onPick) onPick(slug ? getArr().find(function(it) { return it.slug === slug; }) || null : null);
       });
     });
   }
@@ -281,10 +337,12 @@ function initAc(inputId, getArr, allowEmpty) {
 
   input.addEventListener('input', function() {
     input.dataset.slug = '';
+    if (onPick) onPick(null);
     showItems(doFilter(input.value));
   });
   input.addEventListener('compositionend', function() {
     input.dataset.slug = '';
+    if (onPick) onPick(null);
     showItems(doFilter(input.value));
   });
   input.addEventListener('focus', function() { showItems(doFilter(input.value)); });
@@ -428,13 +486,19 @@ function renderFilters() {
   box.innerHTML = html;
 
   var wArr = function() { return _dictArr[weaponDict] || []; };
-  var aArr = function() { return _dictArr['riven/attributes'] || []; };
-  initAc('bw-auc-weapon', wArr, false);
+  var aPosArr = function() { return rivenAttributeCandidates(true, acVal('bw-auc-weapon')); };
+  var aNegArr = function() { return rivenAttributeCandidates(false, acVal('bw-auc-weapon')); };
+  initAc('bw-auc-weapon', wArr, false, function(item) {
+    if (item) clearIneligibleRivenAttributeSelections([
+      { id: 'bw-auc-pos1', positive: true }, { id: 'bw-auc-pos2', positive: true },
+      { id: 'bw-auc-pos3', positive: true }, { id: 'bw-auc-neg', positive: false }
+    ], item.slug);
+  });
   if (_aType === 'riven') {
-    initAc('bw-auc-pos1', aArr, true);
-    initAc('bw-auc-pos2', aArr, true);
+    initAc('bw-auc-pos1', aPosArr, true, null, 100);
+    initAc('bw-auc-pos2', aPosArr, true, null, 100);
     (function(){
-      var _basePos3 = aArr;
+      var _basePos3 = aPosArr;
       var _pos3Arr = function(){
         var base = _basePos3();
         return [
@@ -442,10 +506,10 @@ function renderFilters() {
           { slug: RIVEN_POS_ANY,  i18n: {'zh-hans':{name:'存在（任意第三正）'},en:{name:'Any 3rd Positive'}},  zh:'存在',  en:'Any 3rd Positive' }
         ].concat(base);
       };
-      initAc('bw-auc-pos3', _pos3Arr, true);
+      initAc('bw-auc-pos3', _pos3Arr, true, null, 100);
     })();
     (function(){
-      var _baseNeg = aArr;
+      var _baseNeg = aNegArr;
       var _negArr = function(){
         var base = _baseNeg();
         return [
@@ -453,7 +517,7 @@ function renderFilters() {
           { slug: RIVEN_NEG_ANY,  i18n: {'zh-hans':{name:'存在（任意负词条）'},en:{name:'Any Negative'}},  zh:'存在',  en:'Any Negative' }
         ].concat(base);
       };
-      initAc('bw-auc-neg', _negArr, true);
+      initAc('bw-auc-neg', _negArr, true, null, 100);
     })();
     initSel('bw-auc-polarity');
   } else {
@@ -1005,7 +1069,6 @@ function openCreateModal() {
 
   if (_aType === 'riven') {
     const weapArr = _dictArr['riven/weapons'] || [];
-    const attrArr = _dictArr['riven/attributes'] || [];
     wrap.innerHTML = `
       
       <div class="bw-auc-form-grid">
@@ -1079,11 +1142,18 @@ function openCreateModal() {
           <input class="bw-auc-modal-input" id="bw-cf-note" placeholder="（可选）">
         </div>
       </div>`;
-    initAc('bw-cf-weapon', function() { return _dictArr['riven/weapons'] || []; }, false);
-    initAc('bw-cf-pos1', function() { return _dictArr['riven/attributes'] || []; }, false);
-    initAc('bw-cf-pos2', function() { return _dictArr['riven/attributes'] || []; }, false);
-    initAc('bw-cf-pos3', function() { return _dictArr['riven/attributes'] || []; }, false);
-    initAc('bw-cf-neg',  function() { return _dictArr['riven/attributes'] || []; }, false);
+    initAc('bw-cf-weapon', function() { return _dictArr['riven/weapons'] || []; }, false, function(item) {
+      if (item) clearIneligibleRivenAttributeSelections([
+        { id: 'bw-cf-pos1', valueId: 'bw-cf-pos1-val', positive: true },
+        { id: 'bw-cf-pos2', valueId: 'bw-cf-pos2-val', positive: true },
+        { id: 'bw-cf-pos3', valueId: 'bw-cf-pos3-val', positive: true },
+        { id: 'bw-cf-neg', valueId: 'bw-cf-neg-val', positive: false }
+      ], item.slug);
+    });
+    initAc('bw-cf-pos1', function() { return rivenAttributeCandidates(true, cfSlug('bw-cf-weapon')); }, false, null, 100);
+    initAc('bw-cf-pos2', function() { return rivenAttributeCandidates(true, cfSlug('bw-cf-weapon')); }, false, null, 100);
+    initAc('bw-cf-pos3', function() { return rivenAttributeCandidates(true, cfSlug('bw-cf-weapon')); }, false, null, 100);
+    initAc('bw-cf-neg', function() { return rivenAttributeCandidates(false, cfSlug('bw-cf-weapon')); }, false, null, 100);
     initSel('bw-cf-polarity');
   } else {
     const weapArr = _dictArr[_aType + '/weapons'] || [];

@@ -10,7 +10,7 @@ i18n:{ en:{name,icon,thumb}, 'zh-hans':{name,...} }，一次拉取即得中英�
 
 字典变化极低频，本脚本无需像均价那样小时级刷新；手动触发或每周 cron 即可。
 """
-import json, os, urllib.request, sys
+import json, os, urllib.request, sys, time
 
 DIRECT = "https://api.warframe.market"
 
@@ -41,8 +41,17 @@ OUT = os.environ.get(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "data", "auction-dicts.json"),
 )
 
+# Stay below Warframe.market's public limit of 3 requests per second.
+MIN_REQUEST_INTERVAL = 0.4
+_last_request_started = 0.0
+
 
 def fetch_json(path):
+    global _last_request_started
+    wait = MIN_REQUEST_INTERVAL - (time.monotonic() - _last_request_started)
+    if wait > 0:
+        time.sleep(wait)
+    _last_request_started = time.monotonic()
     req = urllib.request.Request(DIRECT + path, headers=HEADERS)
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read().decode("utf-8"))
