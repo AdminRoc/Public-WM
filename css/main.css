@@ -1830,6 +1830,9 @@ html[data-fui-theme="minimal"] .bw-notice-close:hover {
   50%       { opacity: 1;   transform: translate(50%,-50%) scale(1.3); }
 }
 .bw-batch-prog-text { font-size: .72rem; color: var(--c-text2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bw-batch-refresh-status { margin-top: .4rem; color: var(--c-text2); font-size: .72rem; line-height: 1.45; }
+.bw-batch-refresh-status[hidden] { display: none; }
+.bw-batch-refresh-status.is-error { color: var(--c-err-text); }
 .bw-batch-abort-btn {
   display: inline-flex; align-items: center; gap: .28rem;
   padding: .22rem .6rem; flex-shrink: 0;
@@ -2290,6 +2293,21 @@ html[data-fui-theme="minimal"] .bw-notice-close:hover {
 
 .bw-drawer-field { display: flex; flex-direction: column; gap: .38rem; }
 .bw-drawer-label { font-size: .72rem; font-weight: 700; color: var(--c-text2); letter-spacing: .06em; text-transform: uppercase; }
+
+.bw-edit-orderbook { border: 1px solid var(--c-border); border-radius: var(--r-md); background: rgba(var(--g-deep),.12); padding: .7rem; }
+.bw-edit-orderbook-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .55rem; }
+.bw-edit-orderbook-refresh { flex: 0 0 auto; padding: .22rem .55rem; border: 1px solid var(--c-btn-ghost-border); border-radius: var(--r-sm); background: var(--c-btn-ghost-bg); color: var(--c-text2); font: inherit; font-size: .68rem; cursor: pointer; }
+.bw-edit-orderbook-refresh:hover { border-color: var(--c-gold-mid); color: var(--c-white); }
+.bw-edit-orderbook-refresh:disabled { opacity: .55; cursor: wait; }
+.bw-edit-orderbook-list { min-height: 2.4rem; color: var(--c-text2); font-size: .74rem; }
+.bw-edit-orderbook-empty { padding: .35rem 0; color: var(--c-text2); }
+.bw-edit-order-list { display: grid; gap: .38rem; margin: 0; padding: 0; list-style: none; }
+.bw-edit-order-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-width: 0; padding: .38rem .45rem; border: 1px solid var(--c-border); border-radius: var(--r-sm); background: rgba(var(--g-deep),.1); }
+.bw-edit-order-user { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--c-text); }
+.bw-edit-order-meta { display: block; margin-top: .12rem; color: var(--c-text2); font-size: .65rem; }
+.bw-edit-order-price { flex: 0 0 auto; font-size: .9rem; font-weight: 800; white-space: nowrap; }
+.bw-edit-order-price.is-sell { color: var(--c-sell-text); }
+.bw-edit-order-price.is-buy { color: var(--c-buy-text); }
 
 .bw-vis-pills { display: flex; gap: .4rem; }
 .bw-vis-pill {

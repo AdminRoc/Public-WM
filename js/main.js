@@ -58,6 +58,10 @@ function _roundPrice(p, mode) {
 let _openRow   = null;
 let _openEdit  = null;
 let _activeTypeTags = new Set(); // 径向菜单已提交的类型筛选（tag 或 _RADIAL_OTHER_KEY）
+let _editOrderbookCache = new Map();
+let _editOrderbookTimer = null;
+let _editOrderbookRequest = 0;
+let _batchRefreshNoticeTimer = null;
 
 /* 在线状态维持 */
 let _wmStatus      = 'offline';   // 当前实际状态
@@ -169,7 +173,8 @@ async function refreshItemsAndRerender(btn, alertOnError) {
 /* ──────────────────────────────────────────────────────────
    加载订单
 ─────────────────────────────────────────────────────────── */
-async function loadOrders() {
+async function loadOrders(options) {
+  options = options || {};
   while (true) {
     try {
       const j = await apiFetch('/orders');
@@ -200,10 +205,10 @@ async function loadOrders() {
           _tags:  itemObj?.tags || [],
         });
       });
-      return;
+      return raw.length;
     } catch (e) {
       /* 会话过期等确定性错误不重试（页面会自动跳登录） */
-      if (e && e.message && e.message.indexOf('会话已过期') !== -1) throw e;
+      if (options.once || (e && e.message && e.message.indexOf('会话已过期') !== -1)) throw e;
       const hidden = typeof document !== 'undefined' && document.hidden;
       await sleep(hidden ? 30000 : 2500);
     }
@@ -1165,6 +1170,8 @@ function openEdit(o, showDel) {
     bulkOn.classList.add('active'); bulkOff.classList.remove('active');
   } else {
     ptWrap.style.display = 'none';
+
+    document.getElementById('bw-drawer-per-trade').value = 1;
     bulkOff.classList.add('active'); bulkOn.classList.remove('active');
   }
 
@@ -1183,6 +1190,7 @@ function openEdit(o, showDel) {
   setDrawerMsg('');
   if (showDel) document.getElementById('bw-drawer-confirm-del').classList.add('is-open');
   openDrawer('bw-edit-drawer', 'bw-edit-overlay');
+  _scheduleEditOrderbook(0);
 }
 
 /* 编辑抽屉里用户可能正在改等级输入框，价格提示要按当前输入框里的等级实时算，
@@ -1212,7 +1220,14 @@ function refreshPriceHint(slug, price, rank) {
   }
 }
 
-function closeEdit() { closeDrawer('bw-edit-drawer', 'bw-edit-overlay'); _openEdit = null; }
+function closeEdit() {
+  if (_editOrderbookTimer) clearTimeout(_editOrderbookTimer);
+  _editOrderbookRequest++;
+  const refreshButton = document.getElementById('bw-edit-orderbook-refresh');
+  if (refreshButton) refreshButton.disabled = false;
+  closeDrawer('bw-edit-drawer', 'bw-edit-overlay');
+  _openEdit = null;
+}
 
 function openDrawer(did, oid) {
   document.getElementById(did).classList.add('is-open');
@@ -1225,6 +1240,107 @@ function closeDrawer(did, oid) {
 function setDrawerMsg(text, cls) {
   const el = document.getElementById('bw-drawer-msg'); if (!el) return;
   el.textContent = text; el.className = 'bw-drawer-msg' + (cls ? ' ' + cls : '');
+}
+
+function _editOrderbookQuery() {
+  const type = (_openEdit.order_type || _openEdit.orderType || 'sell') === 'buy' ? 'buy' : 'sell';
+  const params = new URLSearchParams();
+  params.set('type', type);
+  params.set('perTrade', String(Math.max(1, +(document.getElementById('bw-drawer-per-trade-wrap').style.display !== 'none'
+    ? document.getElementById('bw-drawer-per-trade').value : 1) || 1)));
+  const rankWrap = document.getElementById('bw-drawer-rank-wrap');
+  if (rankWrap && rankWrap.style.display !== 'none') params.set('rank', String(Math.max(0, +document.getElementById('bw-drawer-rank').value || 0)));
+  if (_openEdit.subtype) params.set('subtype', String(_openEdit.subtype));
+  const rankKey = params.has('rank') ? params.get('rank') : '';
+  return { type: type, key: [_openEdit._slug, type, rankKey, params.get('perTrade'), params.get('subtype') || ''].join('|'), query: params.toString() };
+}
+
+function _renderEditOrderbook(data, type) {
+  const list = document.getElementById('bw-edit-orderbook-list');
+  const title = document.getElementById('bw-edit-orderbook-title');
+  if (!list) return;
+  if (title) title.textContent = '同条件' + (type === 'buy' ? '求购' : '出售') + '订单（在线）';
+  list.replaceChildren();
+  const orders = Array.isArray(data) ? data : [];
+  if (!orders.length) {
+    const empty = document.createElement('div');
+    empty.className = 'bw-edit-orderbook-empty';
+    empty.textContent = '暂无符合等级与批次条件的在线订单';
+    list.appendChild(empty);
+    return;
+  }
+  const rows = document.createElement('ol');
+  rows.className = 'bw-edit-order-list';
+  orders.slice(0, 5).forEach(function(order) {
+    const row = document.createElement('li');
+    row.className = 'bw-edit-order-row';
+    const identity = document.createElement('div');
+    identity.style.minWidth = '0';
+    const user = document.createElement('div');
+    user.className = 'bw-edit-order-user';
+    user.textContent = order.user && (order.user.ingameName || order.user.slug) || 'WM 用户';
+    const meta = document.createElement('span');
+    meta.className = 'bw-edit-order-meta';
+    const reputation = Number(order.user && order.user.reputation);
+    const quantity = Math.max(1, Number(order.quantity) || 1);
+    const perTrade = Math.max(1, Number(order.perTrade) || 1);
+    meta.textContent = (Number.isFinite(reputation) ? '声望 ' + reputation : '在线') + ' · 数量 ' + quantity + (perTrade > 1 ? ' · 每批 ' + perTrade : '');
+    identity.append(user, meta);
+    const price = document.createElement('strong');
+    price.className = 'bw-edit-order-price is-' + type;
+    price.textContent = (Number(order.platinum) || 0) + 'p';
+    row.append(identity, price);
+    rows.appendChild(row);
+  });
+  list.appendChild(rows);
+}
+
+function _scheduleEditOrderbook(delay) {
+  if (!_openEdit || !_openEdit._slug) return;
+  if (_editOrderbookTimer) clearTimeout(_editOrderbookTimer);
+  _editOrderbookRequest++;
+  const button = document.getElementById('bw-edit-orderbook-refresh');
+  if (button) button.disabled = false;
+  _editOrderbookTimer = setTimeout(function() { _loadEditOrderbook(false); }, delay == null ? 280 : delay);
+}
+
+async function _loadEditOrderbook(force) {
+  if (!_openEdit || !_openEdit._slug) return;
+  const requestId = ++_editOrderbookRequest;
+  const list = document.getElementById('bw-edit-orderbook-list');
+  const button = document.getElementById('bw-edit-orderbook-refresh');
+  const params = _editOrderbookQuery();
+  const cacheHit = _editOrderbookCache.get(params.key);
+  if (!force && cacheHit && Date.now() - cacheHit.at < 30000) {
+    _renderEditOrderbook(cacheHit.data, params.type);
+    return;
+  }
+  if (list) list.textContent = '正在加载同条件在线订单…';
+  if (button) button.disabled = true;
+  try {
+    const response = await apiFetch('/orderbook/' + encodeURIComponent(_openEdit._slug) + '?' + params.query);
+    const orders = response && Array.isArray(response.data) ? response.data : [];
+    _editOrderbookCache.set(params.key, { data: orders, at: Date.now() });
+    if (_editOrderbookCache.size > 24) _editOrderbookCache.delete(_editOrderbookCache.keys().next().value);
+    if (requestId === _editOrderbookRequest && _openEdit) _renderEditOrderbook(orders, params.type);
+  } catch (e) {
+    if (requestId === _editOrderbookRequest && list) list.textContent = '市场订单暂时无法加载：' + window.bwWmErrorText(e);
+  } finally {
+    if (requestId === _editOrderbookRequest && button) button.disabled = false;
+  }
+}
+
+function _showBatchRefreshNotice(message, isError) {
+  const status = document.getElementById('bw-batch-refresh-status');
+  if (!status) return;
+  if (_batchRefreshNoticeTimer) clearTimeout(_batchRefreshNoticeTimer);
+  status.hidden = false;
+  status.classList.toggle('is-error', !!isError);
+  status.textContent = message;
+  _batchRefreshNoticeTimer = setTimeout(function() {
+    status.hidden = true;
+    status.classList.remove('is-error');
+  }, 5000);
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -1342,7 +1458,7 @@ async function batchOp(orders, patchFn) {
   // 计算 patches
   var patches = [];
   orders.forEach(function(o){ var p=patchFn(o); if(p) patches.push({ id:o.id, patch:p }); });
-  if (!patches.length) return;
+  if (!patches.length) return { confirmed: false, total: 0, succeeded: 0, failed: 0 };
   // 优先 batch 1次鉴权（200单=1 KV读），失败回退单条
   try {
     var res = await apiFetch('/orders/batch', { method:'POST', body: JSON.stringify({ patches }) });
@@ -1357,11 +1473,11 @@ async function batchOp(orders, patchFn) {
           idPrefix:'bw-batch', onDone: render,
           getLabel: function(o){ return { type:(o.order_type==='buy')?'求购':'出售', name:o._zh||o._name||o._slug||'(未知物品)' }; }
         });
-        return;
+        return { confirmed: false, total: patches.length, succeeded: okSet.size, failed: res.fails.length };
       }
     }
     render();
-    return;
+    return { confirmed: res.ok === true && okSet.size === patches.length, total: patches.length, succeeded: okSet.size, failed: (res.fails || []).length };
   } catch(e){
     // batch 不可用或整体失败，回退单条
   }
@@ -1377,6 +1493,7 @@ async function batchOp(orders, patchFn) {
       return { type: (o.order_type === 'buy') ? '求购' : '出售', name: o._zh || o._name || o._slug || '(未知物品)' };
     },
   });
+  return { confirmed: false, total: patches.length, succeeded: null, failed: null };
 }
 
 async function visAllOrders(visible) {
@@ -1653,17 +1770,22 @@ function bindEvents() {
   });
   document.getElementById('bw-drawer-rank')?.addEventListener('input', function() {
     if (_openEdit) refreshPriceHint(_openEdit._slug, +document.getElementById('bw-drawer-price').value, _currentEditRank());
+    _scheduleEditOrderbook();
   });
+  document.getElementById('bw-drawer-per-trade')?.addEventListener('input', function() { _scheduleEditOrderbook(); });
+  document.getElementById('bw-edit-orderbook-refresh')?.addEventListener('click', function() { _loadEditOrderbook(true); });
 
   document.getElementById('bw-drawer-bulk-on')?.addEventListener('click', function() {
     document.getElementById('bw-drawer-bulk-on').classList.add('active');
     document.getElementById('bw-drawer-bulk-off').classList.remove('active');
     _showField('bw-drawer-per-trade-wrap', true);
+    _scheduleEditOrderbook();
   });
   document.getElementById('bw-drawer-bulk-off')?.addEventListener('click', function() {
     document.getElementById('bw-drawer-bulk-off').classList.add('active');
     document.getElementById('bw-drawer-bulk-on').classList.remove('active');
     _showField('bw-drawer-per-trade-wrap', false);
+    _scheduleEditOrderbook();
   });
 
   document.getElementById('bw-drawer-update')?.addEventListener('click', async function() {
@@ -1754,10 +1876,39 @@ function bindEvents() {
   });
   document.getElementById('bw-batch-refresh-btn')?.addEventListener('click', async function() {
     const items = batchGuard(); if (!items) return;
-    /* 原样回填当前值，不做任何改动，仅借"更新"接口刷新订单的更新时间 */
-    await batchOp(items, function(o) {
-      return { platinum: o.platinum, quantity: o.quantity || 1, visible: o.visible !== false };
-    });
+    const btn = this;
+    const originalText = btn.textContent;
+    const stamp = function(o) { return o.last_update || o.lastUpdate || o.updatedAt || ''; };
+    const previousStamps = new Map(items.map(function(o) { return [o.id, stamp(o)]; }));
+    btn.disabled = true;
+    btn.textContent = '刷新中…';
+    /* 按编辑面板的 PATCH 字段回填原值，并核对 WM 回读的更新时间。 */
+    try {
+      const result = await batchOp(items, function(o) {
+        const patch = { platinum: o.platinum, quantity: o.quantity || 1, visible: o.visible !== false };
+        if (o.mod_rank !== undefined) patch.rank = o.mod_rank;
+        if (o.quantity_in_set > 1) patch.perTrade = o.quantity_in_set;
+        if (o.subtype) patch.subtype = o.subtype;
+        return patch;
+      });
+      const readCount = await loadOrders({ once: true });
+      render();
+      const latestById = new Map(_orders.map(function(o) { return [o.id, o]; }));
+      const changedCount = items.filter(function(o) {
+        const latest = latestById.get(o.id);
+        return latest && String(stamp(latest)) !== String(previousStamps.get(o.id));
+      }).length;
+      const summary = '已重新读取 ' + readCount + ' 条订单；' + changedCount + '/' + items.length + ' 条所选订单的更新时间发生变化。';
+      if (result && result.confirmed) _showBatchRefreshNotice('WM 已确认 ' + result.succeeded + ' 条原值更新。' + summary, false);
+      else _showBatchRefreshNotice('刷新请求已处理。' + summary + '若仍有失败项，请查看下方列表。', false);
+      btn.textContent = result && result.confirmed ? '已刷新' : '已处理';
+    } catch(e) {
+      _showBatchRefreshNotice('刷新未完成或回读失败，页面可能仍显示旧值：' + window.bwWmErrorText(e), true);
+      btn.textContent = '需核对';
+    } finally {
+      btn.disabled = false;
+      setTimeout(function() { btn.textContent = originalText; }, 2200);
+    }
   });
 
   /* 价格警报 FAB：点击即激活警报筛选 */

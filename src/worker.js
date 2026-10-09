@@ -494,6 +494,64 @@ function memCachePut(map, key, value, ttl, maxKeys) {
 // 注意：物品总表已改为前端经 jsDelivr 加载（data/wm-items.json），
 // 本端点直接返回 WM 原始订单，由前端用本地物品表合并中文名/缩略图等，
 // 边缘函数不再拉取大体积物品数据。
+async function handleWmOrderbook(request, slug) {
+  const sess = getSession(request);
+  if (!sess) return jsonResponse({ error: '请先登录' }, 401);
+  let itemSlug;
+  try { itemSlug = decodeURIComponent(slug); } catch { return jsonResponse({ error: '物品标识无效' }, 400); }
+  const url = new URL(request.url);
+  const type = url.searchParams.get('type');
+  const perTrade = Number(url.searchParams.get('perTrade') || 1);
+  const hasRank = url.searchParams.has('rank');
+  const rank = hasRank ? Number(url.searchParams.get('rank')) : null;
+  const subtype = url.searchParams.get('subtype') || '';
+  if (!itemSlug || !['buy', 'sell'].includes(type) || !Number.isInteger(perTrade) || perTrade < 1 || perTrade > 6 || (hasRank && (!Number.isInteger(rank) || rank < 0 || rank > 100))) {
+    return jsonResponse({ error: '订单筛选条件无效' }, 400);
+  }
+  try {
+    const resp = await wmPublicFetch('/v2/orders/item/' + encodeURIComponent(itemSlug));
+    if (!resp.ok) return jsonResponse({ error: '获取市场订单失败（WM HTTP ' + resp.status + '）' }, 502);
+    const payload = await resp.json();
+    if (!payload || !Array.isArray(payload.data)) return jsonResponse({ error: 'WM 市场订单数据格式无效' }, 502);
+    const owner = String(sess.wm_username || sess.ingame_name || '').toLowerCase();
+    const orders = payload.data.filter(function(order) {
+      const user = order && order.user || {};
+      const status = String(user.status || '').toLowerCase();
+      const orderRank = order && (order.rank !== undefined ? order.rank : (order.mod_rank !== undefined ? order.mod_rank : order.modRank));
+      const perTradeValue = order && (order.perTrade !== undefined ? order.perTrade : (order.quantity_in_set !== undefined ? order.quantity_in_set : order.quantityInSet));
+      const orderPerTrade = Number(perTradeValue || 1);
+      const orderType = order && (order.type || order.order_type || order.orderType);
+      if (!order || orderType !== type || !['online', 'ingame'].includes(status)) return false;
+      if (owner && [user.slug, user.ingameName].some(function(name) { return String(name || '').toLowerCase() === owner; })) return false;
+      if (hasRank && (orderRank === undefined || orderRank === null || Number(orderRank) !== rank)) return false;
+      if (orderPerTrade !== perTrade) return false;
+      if (subtype && String(order.subtype || '') !== subtype) return false;
+      return Number.isFinite(Number(order.platinum)) && Number(order.platinum) > 0;
+    }).sort(function(a, b) {
+      const priceOrder = type === 'buy' ? Number(b.platinum) - Number(a.platinum) : Number(a.platinum) - Number(b.platinum);
+      if (priceOrder) return priceOrder;
+      return String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
+    }).slice(0, 5).map(function(order) {
+      const user = order.user || {};
+      return {
+        id: String(order.id || ''),
+        type: type,
+        platinum: Number(order.platinum),
+        quantity: Math.max(1, Number(order.quantity) || 1),
+        perTrade: Math.max(1, Number(order.perTrade || order.quantity_in_set || order.quantityInSet) || 1),
+        user: {
+          slug: String(user.slug || ''),
+          ingameName: String(user.ingameName || ''),
+          reputation: Number(user.reputation) || 0,
+        },
+      };
+    });
+    return noStore(jsonResponse({ data: orders }));
+  } catch (e) {
+    return jsonResponse({ error: '获取市场订单失败：' + (e && e.message || e) }, 502);
+  }
+}
+
 async function handleWmOrders(request) {
   const wmJwt = getWmJwt(request);
   if (!wmJwt) return jsonResponse({ error: '请先登录' }, 401);
@@ -1090,6 +1148,9 @@ async function handleFetch(request, env) {
 
     /* 静态代理 */
     if (p === '/api/wm/avatar' && request.method === 'GET') return handleAvatarProxy(request);
+
+    const orderbookMatch = p.match(/^\/api\/wm\/orderbook\/([^/]+)$/);
+    if (orderbookMatch && request.method === 'GET') return noStore(await handleWmOrderbook(request, orderbookMatch[1]));
 
     if (p === '/api/wm/orders/batch'  && request.method === 'POST') return handleWmOrdersBatch(request);
     if (p === '/api/wm/orders'        && request.method === 'GET')  return handleWmOrders(request);

@@ -289,7 +289,7 @@
           <div class="bw-batch-item">
             <label class="bw-batch-field-label">原价刷新订单</label>
             <div class="bw-batch-input-row">
-              <button class="bw-batch-btn" id="bw-batch-refresh-btn" title="不改变价格/数量/可见性，仅刷新当前筛选订单的更新时间">原价刷新</button>
+              <button class="bw-batch-btn" id="bw-batch-refresh-btn" title="保持订单字段原值，提交更新并回读更新时间">原价刷新</button>
             </div>
           </div>
         </div>
@@ -303,6 +303,8 @@
             中止
           </button>
         </div>
+
+        <div class="bw-batch-refresh-status" id="bw-batch-refresh-status" role="status" aria-live="polite" hidden></div>
 
         <!-- 批量失败态面板 -->
         <div class="bw-batch-fail" id="bw-batch-fail" style="display:none">
@@ -430,6 +432,14 @@
           <input type="number" id="bw-drawer-rank" class="bw-drawer-input" min="0" value="0">
         </div>
       </div>
+
+      <section class="bw-edit-orderbook" aria-labelledby="bw-edit-orderbook-title">
+        <div class="bw-edit-orderbook-head">
+          <span class="bw-drawer-label" id="bw-edit-orderbook-title">同条件市场订单</span>
+          <button class="bw-edit-orderbook-refresh" id="bw-edit-orderbook-refresh" type="button" aria-label="刷新市场订单">刷新</button>
+        </div>
+        <div class="bw-edit-orderbook-list" id="bw-edit-orderbook-list" role="status" aria-live="polite">正在加载订单…</div>
+      </section>
 
       <div class="bw-drawer-actions">
         <button class="bw-drawer-btn bw-drawer-btn-update" id="bw-drawer-update">更新</button>
