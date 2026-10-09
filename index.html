@@ -295,9 +295,9 @@
         </div>
         <div class="bw-batch-progress" id="bw-batch-progress" style="display:none">
           <div class="bw-batch-bar-wrap">
-            <div class="bw-batch-bar" id="bw-batch-bar"></div>
+            <div class="bw-batch-bar" id="bw-batch-bar" role="progressbar" aria-label="批量订单操作进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
           </div>
-          <span class="bw-batch-prog-text" id="bw-batch-prog-text">0 / 0</span>
+          <span class="bw-batch-prog-text" id="bw-batch-prog-text" role="status" aria-live="polite">0 / 0</span>
           <button class="bw-batch-abort-btn" id="bw-batch-abort-btn" title="中止当前批处理任务">
             <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><rect x="2" y="2" width="8" height="8" rx="1"/></svg>
             中止

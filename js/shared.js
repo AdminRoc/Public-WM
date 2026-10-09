@@ -692,6 +692,14 @@ async function runBatch(items, workFn, opts) {
   const txt     = document.getElementById(idPrefix + '-prog-text');
   const abortBtn = document.getElementById(idPrefix + '-abort-btn');
   if (!bar || !prog || !txt) return;
+  const barWrap = prog.querySelector('.bw-batch-bar-wrap');
+  bar.classList.remove('is-indeterminate');
+  if (barWrap) barWrap.classList.remove('is-indeterminate');
+  if (abortBtn) abortBtn.style.display = '';
+  bar.setAttribute('role', 'progressbar');
+  bar.setAttribute('aria-valuemin', '0');
+  bar.setAttribute('aria-valuemax', '100');
+  bar.setAttribute('aria-valuenow', '0');
 
   // 重置中止标志并绑定按钮
   _batchAbort[idPrefix] = { requested: false };
@@ -709,6 +717,7 @@ async function runBatch(items, workFn, opts) {
   prog.style.display = '';
   bar.style.width = '0%';
   txt.style.display = ''; txt.style.color = '';
+  txt.textContent = '0 / ' + items.length;
 
   let done = 0;
   let aborted = false;
@@ -737,7 +746,9 @@ async function runBatch(items, workFn, opts) {
        直接进失败面板用户看不懂（删单报 notVerified 的真实案例就发生在这里） */
     catch (e) { failures.push({ item: item, err: window.bwWmErrorText(e) }); }
     done++;
-    bar.style.width = Math.round(done / items.length * 100) + '%';
+    const percent = Math.round(done / items.length * 100);
+    bar.style.width = percent + '%';
+    bar.setAttribute('aria-valuenow', String(percent));
     txt.textContent = done + ' / ' + items.length + (failures.length ? '  ✗' + failures.length : '');
     if (delayMs) await sleep(delayMs);
   }
@@ -747,7 +758,7 @@ async function runBatch(items, workFn, opts) {
     abortBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><rect x="2" y="2" width="8" height="8" rx="1"/></svg> 中止';
     abortBtn.onclick = null;
   }
-  prog.style.display = 'none'; bar.style.width = '0%';
+  prog.style.display = 'none'; bar.style.width = '0%'; bar.setAttribute('aria-valuenow', '0');
   txt.style.display = 'none';
 
   if (aborted) {

@@ -1813,6 +1813,23 @@ html[data-fui-theme="minimal"] .bw-notice-close:hover {
   from { background-position: 0 0, 0% 0%; }
   to   { background-position: 0 0, -100% -100%; }
 }
+.bw-batch-bar-wrap.is-indeterminate { overflow: hidden; }
+.bw-batch-bar.is-indeterminate {
+  width: 32% !important;
+  transform: translateX(-100%);
+  animation: batchBarFlow 1.3s linear infinite, bwBatchIndeterminate 1.25s ease-in-out infinite;
+}
+@keyframes bwBatchIndeterminate {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(310%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bw-batch-bar.is-indeterminate { animation: none !important; transform: translateX(35%); }
+}
+html[data-fui-theme="minimal"] .bw-batch-bar.is-indeterminate {
+  animation: none !important;
+  transform: translateX(35%);
+}
 /* 彗星头部：始终贴在进度条当前前沿，随宽度变化自动跟随 */
 .bw-batch-bar::after {
   content: '';

@@ -122,7 +122,7 @@ async function _itemsFetchOnce() {
       _radialItemTagIndex = null;
       _itemsSaveToCache(arr);
       ok=true;
-      if (_orders && _orders.length) { try{ render(); }catch(_){} }
+      _refreshLoadedOrderItems();
       return true;
     },
     { retryDelay: 2500, fetchTimeout: 7000 }
@@ -179,32 +179,7 @@ async function loadOrders(options) {
     try {
       const j = await apiFetch('/orders');
       const raw = Array.isArray(j.data) ? j.data : [];
-      // 3000单 O(N*M) find 会卡死，建 Map O(N) — 严格复刻原 find 语义 (url_name||slug||id|itemId)
-      const _itemMap = new Map();
-      for (var _mi=0; _mi<_items.length; _mi++) { var _it=_items[_mi]; if(_it.slug) _itemMap.set(_it.slug,_it); if(_it.url_name) _itemMap.set(_it.url_name,_it); if(_it.id) _itemMap.set(_it.id,_it); }
-      _orders = raw.map(function(o) {
-        const rawSlug = o.item?.url_name || o.slug || o.item?.id || o.itemId || '';
-        let itemObj = rawSlug ? (_itemMap.get(rawSlug) || null) : null;
-        // Public 的 orders 仅含 itemId，需回退按 id 找 slug
-        if (!itemObj && o.itemId) {
-          itemObj = _items.find(function(it){ return it.id === o.itemId; }) || null;
-        }
-        const slug = itemObj ? (itemObj.slug || rawSlug) : rawSlug;
-        // 确保 _itemMap 命中 id 时也能拿到正确 slug
-        /* v2 API 用 camelCase，统一别名到 snake_case 供渲染层使用 */
-        return Object.assign({}, o, {
-          order_type:  o.order_type  || o.orderType  || o.type || 'sell',
-          last_update: o.last_update || o.lastUpdate  || o.updatedAt || '',
-          creation_date: o.creation_date || o.creationDate || o.createdAt || '',
-          /* WM v2 订单字段实测为 rank / perTrade（非 mod_rank / quantity_in_set），做了实测校验，此处按官方字段名兜底 */
-          mod_rank:    o.rank !== undefined ? o.rank : (o.mod_rank !== undefined ? o.mod_rank : (o.modRank !== undefined ? o.modRank : undefined)),
-          quantity_in_set: o.perTrade || o.quantity_in_set || o.quantityInSet || undefined,
-          _slug:  slug,
-          _name:  itemObj?.en || o.item?.en || o.item?.en_name || o.item?.name || slug,
-          _zh:    itemObj?.zh || o.item?.zh || '',
-          _tags:  itemObj?.tags || [],
-        });
-      });
+      _orders = _mapOrdersWithItems(raw);
       return raw.length;
     } catch (e) {
       /* 会话过期等确定性错误不重试（页面会自动跳登录） */
@@ -213,6 +188,42 @@ async function loadOrders(options) {
       await sleep(hidden ? 30000 : 2500);
     }
   }
+}
+
+function _mapOrdersWithItems(rawOrders) {
+  const source = Array.isArray(rawOrders) ? rawOrders : [];
+  // 3000单使用 Map 查找，避免逐单扫描完整物品表。
+  const itemMap = new Map();
+  for (var i = 0; i < _items.length; i++) {
+    var item = _items[i];
+    if (item.slug) itemMap.set(item.slug, item);
+    if (item.url_name) itemMap.set(item.url_name, item);
+    if (item.id) itemMap.set(item.id, item);
+  }
+  return source.map(function(o) {
+    const rawSlug = o.item?.url_name || o.slug || o.item?.id || o.itemId || '';
+    let itemObj = rawSlug ? (itemMap.get(rawSlug) || null) : null;
+    const slug = itemObj ? (itemObj.slug || rawSlug) : (o._slug || rawSlug);
+    /* v2 API 使用 camelCase；归一为渲染层使用的字段，并保留目录暂缺时已有的展示信息。 */
+    return Object.assign({}, o, {
+      order_type: o.order_type || o.orderType || o.type || 'sell',
+      last_update: o.last_update || o.lastUpdate || o.updatedAt || '',
+      creation_date: o.creation_date || o.creationDate || o.createdAt || '',
+      /* WM v2 订单字段为 rank / perTrade，归一为历史渲染字段。 */
+      mod_rank: o.rank !== undefined ? o.rank : (o.mod_rank !== undefined ? o.mod_rank : (o.modRank !== undefined ? o.modRank : undefined)),
+      quantity_in_set: o.perTrade || o.quantity_in_set || o.quantityInSet || undefined,
+      _slug: slug,
+      _name: itemObj?.en || o.item?.en || o.item?.en_name || o.item?.name || o._name || slug,
+      _zh: itemObj?.zh || o.item?.zh || o._zh || '',
+      _tags: itemObj?.tags || o._tags || [],
+    });
+  });
+}
+
+function _refreshLoadedOrderItems() {
+  if (!_orders || !_orders.length) return;
+  _orders = _mapOrdersWithItems(_orders);
+  try { render(); } catch (_) {}
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -1496,6 +1507,48 @@ async function batchOp(orders, patchFn) {
   return { confirmed: false, total: patches.length, succeeded: null, failed: null };
 }
 
+function _setBatchRefreshProgress(message, indeterminate) {
+  const progress = document.getElementById('bw-batch-progress');
+  const bar = document.getElementById('bw-batch-bar');
+  const text = document.getElementById('bw-batch-prog-text');
+  const wrap = progress && progress.querySelector('.bw-batch-bar-wrap');
+  const abortButton = document.getElementById('bw-batch-abort-btn');
+  if (!progress || !bar || !text) return;
+  progress.style.display = '';
+  progress.setAttribute('aria-live', 'polite');
+  bar.classList.toggle('is-indeterminate', !!indeterminate);
+  if (wrap) wrap.classList.toggle('is-indeterminate', !!indeterminate);
+  text.style.display = '';
+  text.textContent = message;
+  bar.setAttribute('aria-valuetext', message);
+  if (indeterminate) {
+    bar.style.width = '';
+    bar.removeAttribute('aria-valuenow');
+  } else {
+    bar.style.width = '100%';
+    bar.setAttribute('aria-valuenow', '100');
+  }
+  if (abortButton) abortButton.style.display = 'none';
+}
+
+function _clearBatchRefreshProgress() {
+  const progress = document.getElementById('bw-batch-progress');
+  const bar = document.getElementById('bw-batch-bar');
+  const text = document.getElementById('bw-batch-prog-text');
+  const wrap = progress && progress.querySelector('.bw-batch-bar-wrap');
+  const abortButton = document.getElementById('bw-batch-abort-btn');
+  if (progress) progress.style.display = 'none';
+  if (bar) {
+    bar.classList.remove('is-indeterminate');
+    bar.style.width = '0%';
+    bar.removeAttribute('aria-valuenow');
+    bar.removeAttribute('aria-valuetext');
+  }
+  if (wrap) wrap.classList.remove('is-indeterminate');
+  if (text) { text.style.display = 'none'; text.textContent = '0 / 0'; }
+  if (abortButton) abortButton.style.display = '';
+}
+
 async function visAllOrders(visible) {
   const targets = _orders.filter(function(o) { return (o.visible !== false) !== visible; });
   if (!targets.length) return;
@@ -1884,6 +1937,7 @@ function bindEvents() {
     btn.textContent = '刷新中…';
     /* 按编辑面板的 PATCH 字段回填原值，并核对 WM 回读的更新时间。 */
     try {
+      _setBatchRefreshProgress('正在提交 ' + items.length + ' 条原值订单…', true);
       const result = await batchOp(items, function(o) {
         const patch = { platinum: o.platinum, quantity: o.quantity || 1, visible: o.visible !== false };
         if (o.mod_rank !== undefined) patch.rank = o.mod_rank;
@@ -1891,8 +1945,10 @@ function bindEvents() {
         if (o.subtype) patch.subtype = o.subtype;
         return patch;
       });
+      _setBatchRefreshProgress('请求已处理，正在回读订单状态…', true);
       const readCount = await loadOrders({ once: true });
       render();
+      _setBatchRefreshProgress('订单状态已回读：' + readCount + ' 条', false);
       const latestById = new Map(_orders.map(function(o) { return [o.id, o]; }));
       const changedCount = items.filter(function(o) {
         const latest = latestById.get(o.id);
@@ -1906,6 +1962,7 @@ function bindEvents() {
       _showBatchRefreshNotice('刷新未完成或回读失败，页面可能仍显示旧值：' + window.bwWmErrorText(e), true);
       btn.textContent = '需核对';
     } finally {
+      _clearBatchRefreshProgress();
       btn.disabled = false;
       setTimeout(function() { btn.textContent = originalText; }, 2200);
     }
@@ -1957,7 +2014,8 @@ async function main() {
   _session = sess;
   renderProfile(sess);
   bindEvents();
-  await loadItems();
+  /* 订单优先加载；目录到达后只重映射内存中的订单，不再重复请求个人订单。 */
+  loadItems().catch(function() {});
   /* 极简模式以最小化带宽为第一目标：均价数据集只用于价格提示/稀缺筛选这些
      非核心的辅助功能，直接跳过下载；核心的订单管理与在线状态维持完全不受影响。 */
   if (typeof _isMinimal !== 'function' || !_isMinimal()) preloadAvgPrices();
@@ -1969,11 +2027,6 @@ async function main() {
     document.getElementById('bw-buy-list').innerHTML = '';
   }
   render();
-
-  /* 页面元素全部加载完毕后，自动发起一次「刷新订单状态」按钮的激活，
-     确保首次进入 / 新登录时无需手动点击即可拿到完整中文名 */
-  const refreshBtn = document.getElementById('bw-refresh-items-btn');
-  if (refreshBtn) refreshItemsAndRerender(refreshBtn, false);
 }
 
 document.addEventListener('DOMContentLoaded', main);
