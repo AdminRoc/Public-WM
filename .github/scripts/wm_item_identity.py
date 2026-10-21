@@ -5,6 +5,9 @@ import tempfile
 from pathlib import Path
 
 
+_RETIREMENT_REGISTRY = Path(__file__).resolve().parents[1] / 'wm-retired-items.json'
+
+
 def _name(item):
     i18n = item.get('i18n') or {}
     return str(((i18n.get('en') or {}).get('name')) or item.get('en') or item.get('name') or '').strip()
@@ -25,10 +28,64 @@ def validate_current_items(items, minimum=1500):
         raise ValueError('WM item manifest has missing or duplicate slugs')
 
 
-def validate_identity_continuity(previous_items, current_items, minimum=1500):
+def _retirement_records(retired_items=None):
+    if retired_items is None:
+        try:
+            document = json.loads(_RETIREMENT_REGISTRY.read_text(encoding='utf-8'))
+        except (OSError, ValueError) as error:
+            raise ValueError('WM retired-item registry is missing or invalid') from error
+        if not isinstance(document, dict) or document.get('schema_version') != 1:
+            raise ValueError('WM retired-item registry has an unsupported schema')
+        retired_items = document.get('items')
+
+    if not isinstance(retired_items, list):
+        raise ValueError('WM retired-item registry items must be a list')
+
+    by_id = {}
+    slugs = set()
+    for record in retired_items:
+        if not isinstance(record, dict):
+            raise ValueError('WM retired-item registry contains an invalid record')
+        item_id = record.get('id')
+        slug = record.get('slug')
+        evidence = record.get('evidence') or {}
+        catalog = evidence.get('catalog') if isinstance(evidence, dict) else None
+        orders = evidence.get('orders') if isinstance(evidence, dict) else None
+        if not isinstance(item_id, str) or not item_id.strip() or not isinstance(slug, str) or not slug.strip():
+            raise ValueError('WM retired-item registry has a missing stable ID or slug')
+        item_id = item_id.strip()
+        slug = slug.strip()
+        if item_id in by_id:
+            raise ValueError('WM retired-item registry has duplicate stable IDs')
+        if slug in slugs:
+            raise ValueError('WM retired-item registry has duplicate slugs')
+        if (
+            record.get('confirmed_not_tradable') is not True
+            or not isinstance(record.get('checked_at'), str)
+            or not record['checked_at'].strip()
+            or not isinstance(catalog, dict)
+            or catalog.get('http_status') != 200
+            or catalog.get('id_present') is not False
+            or catalog.get('slug_present') is not False
+            or not isinstance(orders, dict)
+            or orders.get('http_status') != 404
+            or orders.get('error') != 'app.item.notFound'
+        ):
+            raise ValueError('WM retired-item record lacks confirmed catalog and order-route evidence')
+        by_id[item_id] = slug
+        slugs.add(slug)
+    return by_id
+
+
+def validate_identity_continuity(previous_items, current_items, minimum=1500, retired_items=None):
     validate_current_items(current_items, minimum=minimum)
     current_by_id = {str(item['id']): item for item in current_items}
     current_by_slug = {item['slug']: item for item in current_items}
+    retired = _retirement_records(retired_items)
+    reappeared = set(retired) & set(current_by_id)
+    if reappeared:
+        raise ValueError('retired stable IDs reappeared; review the retirement registry before publishing: %s' %
+                         ', '.join(sorted(reappeared)[:8]))
     current_by_name = {}
     for item in current_items:
         key = _name_key(_name(item))
@@ -49,7 +106,11 @@ def validate_identity_continuity(previous_items, current_items, minimum=1500):
             if old_id in old_ids:
                 raise ValueError('previous WM item manifest has duplicate stable ids')
             old_ids.add(old_id)
+            if old_id in retired and retired[old_id] != old_slug:
+                raise ValueError('retired-item registry slug does not match the previous slug: %s' % old_slug)
             current = current_by_id.get(old_id)
+            if current is None and old_id in retired:
+                continue
         else:
             old_name = _name_key(_name(old))
             direct = current_by_slug.get(old_slug)
@@ -76,7 +137,7 @@ def validate_identity_continuity(previous_items, current_items, minimum=1500):
     return renames
 
 
-def validate_published_manifest_continuity(previous_doc, current_doc, minimum=1500):
+def validate_published_manifest_continuity(previous_doc, current_doc, minimum=1500, retired_items=None):
     """Validate that a KV release keeps every identity in the parent manifest."""
     if not isinstance(previous_doc, dict) or not isinstance(current_doc, dict):
         raise ValueError('WM item release manifests must be JSON objects')
@@ -86,7 +147,9 @@ def validate_published_manifest_continuity(previous_doc, current_doc, minimum=15
         raise ValueError('parent WM item manifest is missing or empty')
     if not isinstance(current_items, list) or not current_items:
         raise ValueError('current WM item manifest is missing or empty')
-    return validate_identity_continuity(previous_items, current_items, minimum=minimum)
+    return validate_identity_continuity(
+        previous_items, current_items, minimum=minimum, retired_items=retired_items
+    )
 
 
 def build_identity_manifest(current_items, previous_items, previous_identity, renames):

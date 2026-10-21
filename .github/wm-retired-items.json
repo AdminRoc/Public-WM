@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "6214e890e3c4660048a8b981",
+      "slug": "praghasa_throne_room_scene",
+      "name": "Praghasa Throne Room Scene",
+      "confirmed_not_tradable": true,
+      "checked_at": "2026-10-21T19:57:09Z",
+      "evidence": {
+        "catalog": {
+          "url": "https://api.warframe.market/v2/items",
+          "checked_at": "2026-10-21T19:57:09Z",
+          "api_version": "0.25.0",
+          "http_status": 200,
+          "item_count": 3892,
+          "id_present": false,
+          "slug_present": false
+        },
+        "orders": {
+          "url": "https://api.warframe.market/v2/orders/itemId/6214e890e3c4660048a8b981",
+          "checked_at": "2026-10-21T19:57:09Z",
+          "api_version": "0.25.0",
+          "http_status": 404,
+          "error": "app.item.notFound"
+        },
+        "item_page": {
+          "url": "https://warframe.market/items/praghasa_throne_room_scene",
+          "http_status": 403,
+          "note": "Cloudflare challenge; not used as retirement evidence"
+        }
+      }
+    }
+  ]
+}

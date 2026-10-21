@@ -103,6 +103,101 @@ class WmItemIdentityTests(unittest.TestCase):
         self.assertNotIn('renamed_old', mapped)
         self.assertEqual(mapped['old_slug'], {'avg': 84})
 
+    def test_explicitly_confirmed_retirement_allows_only_the_matching_stable_id(self):
+        previous = [
+            {'id': 'keep-id', 'slug': 'keep_slug', 'en': 'Keep'},
+            {'id': 'retired-id', 'slug': 'retired_slug', 'en': 'Retired'},
+        ]
+        current = [{'id': 'keep-id', 'slug': 'keep_slug', 'en': 'Keep'}]
+        retirement = [{
+            'id': 'retired-id',
+            'slug': 'retired_slug',
+            'confirmed_not_tradable': True,
+            'checked_at': '2026-10-21T19:34:43Z',
+            'evidence': {
+                'catalog': {
+                    'http_status': 200,
+                    'id_present': False,
+                    'slug_present': False,
+                },
+                'orders': {
+                    'http_status': 404,
+                    'error': 'app.item.notFound',
+                },
+            },
+        }]
+
+        self.assertEqual(
+            validate_identity_continuity(previous, current, minimum=1, retired_items=retirement),
+            {},
+        )
+        self.assertEqual(
+            validate_published_manifest_continuity(
+                {'data': previous}, {'data': current}, minimum=1, retired_items=retirement
+            ),
+            {},
+        )
+        mapped = map_previous_results_by_id(
+            current,
+            {'retired_slug': {'avg': 42}},
+            {'items': {'keep-id': {'slug': 'keep_slug', 'aliases': []}}},
+            {},
+        )
+        self.assertNotIn('retired_slug', mapped)
+
+    def test_retirement_cannot_hide_a_slug_mismatch_or_unreviewed_loss(self):
+        previous = [{'id': 'retired-id', 'slug': 'previous_slug', 'en': 'Retired'}]
+        current = [{'id': 'other-id', 'slug': 'other_slug', 'en': 'Other'}]
+        retirement = [{
+            'id': 'retired-id',
+            'slug': 'different_slug',
+            'confirmed_not_tradable': True,
+            'checked_at': '2026-10-21T19:34:43Z',
+            'evidence': {
+                'catalog': {'http_status': 200, 'id_present': False, 'slug_present': False},
+                'orders': {'http_status': 404, 'error': 'app.item.notFound'},
+            },
+        }]
+
+        with self.assertRaisesRegex(ValueError, 'does not match the previous slug'):
+            validate_identity_continuity(previous, current, minimum=1, retired_items=retirement)
+        with self.assertRaisesRegex(ValueError, 'lost 1 published identities'):
+            validate_identity_continuity(previous, current, minimum=1, retired_items=[])
+
+    def test_retired_identity_reappearing_requires_registry_review(self):
+        previous = [{'id': 'retired-id', 'slug': 'retired_slug', 'en': 'Retired'}]
+        current = [{'id': 'retired-id', 'slug': 'retired_slug', 'en': 'Retired'}]
+        retirement = [{
+            'id': 'retired-id',
+            'slug': 'retired_slug',
+            'confirmed_not_tradable': True,
+            'checked_at': '2026-10-21T19:34:43Z',
+            'evidence': {
+                'catalog': {'http_status': 200, 'id_present': False, 'slug_present': False},
+                'orders': {'http_status': 404, 'error': 'app.item.notFound'},
+            },
+        }]
+
+        with self.assertRaisesRegex(ValueError, 'retired stable IDs reappeared'):
+            validate_identity_continuity(previous, current, minimum=1, retired_items=retirement)
+
+    def test_retirement_requires_both_catalog_and_order_route_evidence(self):
+        previous = [{'id': 'retired-id', 'slug': 'retired_slug', 'en': 'Retired'}]
+        current = [{'id': 'other-id', 'slug': 'other_slug', 'en': 'Other'}]
+        retirement = [{
+            'id': 'retired-id',
+            'slug': 'retired_slug',
+            'confirmed_not_tradable': True,
+            'checked_at': '2026-10-21T19:34:43Z',
+            'evidence': {
+                'catalog': {'http_status': 200, 'id_present': True, 'slug_present': False},
+                'orders': {'http_status': 404, 'error': 'app.item.notFound'},
+            },
+        }]
+
+        with self.assertRaisesRegex(ValueError, 'lacks confirmed catalog and order-route evidence'):
+            validate_identity_continuity(previous, current, minimum=1, retired_items=retirement)
+
 
 if __name__ == '__main__':
     unittest.main()
