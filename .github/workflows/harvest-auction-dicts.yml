@@ -21,6 +21,7 @@ jobs:
   harvest:
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
     steps:
       - name: Checkout
@@ -65,3 +66,9 @@ jobs:
         if: steps.commit.outputs.changed == 'true'
         run: |
           curl -s "https://purge.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/auction-dicts.json" || true
+
+      - name: Dispatch KV sync after a changed auction dictionary release
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run .github/workflows/sync-kv.yml --repo AdminRoc/Public-WM --ref main
