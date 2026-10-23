@@ -117,11 +117,16 @@ jobs:
             ["wm_items_json"]="data/wm-items.json"
           )
           verify_readback() {
-            local endpoint="$1" key="$2" src="$3" expected code body
+            local endpoint="$1" key="$2" src="$3" token="${4:-}" expected code body
             expected=$(sha256sum "$src" | awk '{print $1}')
             body="/tmp/${key}-readback-$(echo "$endpoint" | tr '/:' '__').json"
-            code=$(curl -sS -o "$body" -w "%{http_code}" --connect-timeout 20 --max-time 60 \
-              "${endpoint}?key=${key}&verify=${expected}")
+            if [ -n "$token" ]; then
+              code=$(curl -sS -o "$body" -w "%{http_code}" --connect-timeout 20 --max-time 60 \
+                -H "Authorization: Bearer ${token}" "${endpoint}?key=${key}&verify=${expected}")
+            else
+              code=$(curl -sS -o "$body" -w "%{http_code}" --connect-timeout 20 --max-time 60 \
+                "${endpoint}?key=${key}&verify=${expected}")
+            fi
             if [ "$code" != "200" ]; then
               echo "$key KV readback HTTP $code from ${endpoint}" >&2
               return 1
@@ -192,7 +197,7 @@ jobs:
                 echo "::error::BWM 写入 $key 失败 HTTP $code2（PWM 写入继续，最终 run 标记失败）"
                 fail=1
               else
-                verify_readback "https://boss.wfspeed.run/api/kv" "$key" "$src" || fail=1
+                verify_readback "https://boss.wfspeed.run/api/kv" "$key" "$src" "${BWM_KV_WRITE_TOKEN}" || fail=1
               fi
             else
               echo "skip BWM 双写（未配 BWM_KV_WRITE_TOKEN/BWM_UPDATE_URL）"
