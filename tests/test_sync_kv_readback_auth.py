@@ -21,6 +21,11 @@ class SyncKvReadbackAuthTests(unittest.TestCase):
             workflow,
         )
 
+    def test_oversized_bwm_catalog_is_skipped_when_verified_and_413_is_not_retried(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn('if [ "$key" = "wm_items_json" ] && verify_readback', workflow)
+        self.assertIn('if [ "$code2" = "413" ]; then break; fi', workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

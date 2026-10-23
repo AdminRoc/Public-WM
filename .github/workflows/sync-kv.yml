@@ -181,22 +181,36 @@ jobs:
             fi
             # 双写 BWM_KV（Private 私库无 Action，用公库顺带写，省 WM API）
             if [ -n "${BWM_KV_WRITE_TOKEN}" ] && [ -n "${BWM_UPDATE_URL}" ]; then
+              bwm_catalog_already_current=false
+              if [ "$key" = "wm_items_json" ] && verify_readback "https://boss.wfspeed.run/api/kv" "$key" "$src" "${BWM_KV_WRITE_TOKEN}"; then
+                bwm_catalog_already_current=true
+                echo "BWM wm_items_json already matches the source; skipped oversized redundant write"
+              fi
               code2=""
-              for attempt in 1 2 3 4 5 6 7 8; do
-                code2=$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 20 --max-time 60 \
-                  -X POST "${BWM_UPDATE_URL}" \
-                  -H "Authorization: Bearer ${BWM_KV_WRITE_TOKEN}" \
-                  -H "Content-Type: application/json" \
-                  --data-binary "@/tmp/kv-payload.json")
-                if [ "$code2" = "200" ]; then break; fi
-                echo "kv $key 第 $attempt 次写入 BWM HTTP $code2，稍后重试..."
-                if [ "$attempt" -lt 8 ]; then sleep 20; fi
-              done
+              if [ "$bwm_catalog_already_current" != true ]; then
+                for attempt in 1 2 3 4 5 6 7 8; do
+                  code2=$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 20 --max-time 60 \
+                    -X POST "${BWM_UPDATE_URL}" \
+                    -H "Authorization: Bearer ${BWM_KV_WRITE_TOKEN}" \
+                    -H "Content-Type: application/json" \
+                    --data-binary "@/tmp/kv-payload.json")
+                  if [ "$code2" = "200" ]; then break; fi
+                  echo "kv $key 第 $attempt 次写入 BWM HTTP $code2，稍后重试..."
+                  if [ "$code2" = "413" ]; then break; fi
+                  if [ "$attempt" -lt 8 ]; then sleep 20; fi
+                done
+              else
+                code2="200"
+              fi
               echo "kv $key <- $src -> BWM HTTP $code2"
               if [ "$code2" != "200" ]; then
-                echo "::error::BWM 写入 $key 失败 HTTP $code2（PWM 写入继续，最终 run 标记失败）"
-                fail=1
-              else
+                if [ "$code2" = "413" ] && verify_readback "https://boss.wfspeed.run/api/kv" "$key" "$src" "${BWM_KV_WRITE_TOKEN}"; then
+                  echo "BWM $key write was rejected as oversized, but a fresh readback confirms the expected value; not replaying"
+                else
+                  echo "::error::BWM 写入 $key 失败 HTTP $code2（PWM 写入继续，最终 run 标记失败）"
+                  fail=1
+                fi
+              elif [ "$bwm_catalog_already_current" != true ]; then
                 verify_readback "https://boss.wfspeed.run/api/kv" "$key" "$src" "${BWM_KV_WRITE_TOKEN}" || fail=1
               fi
             else
