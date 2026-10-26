@@ -121,6 +121,11 @@ jobs:
           git fetch origin main
           test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" || { echo "::error::Public-WM main advanced before release publication"; exit 1; }
 
+      - name: Publish and verify the small PWM release pointer
+        env:
+          KV_WRITE_TOKEN: ${{ secrets.KV_WRITE_TOKEN }}
+        run: python3 .github/scripts/publish_release_pointer.py
+
       - name: Update Private-WM compatibility data
         env:
           BWM_KV_WRITE_TOKEN: ${{ secrets.BWM_KV_WRITE_TOKEN }}
@@ -250,8 +255,3 @@ jobs:
             fi
             rm -f "$payload" "$response"
           done
-
-      - name: Publish and verify the small PWM release pointer
-        env:
-          KV_WRITE_TOKEN: ${{ secrets.KV_WRITE_TOKEN }}
-        run: python3 .github/scripts/publish_release_pointer.py
