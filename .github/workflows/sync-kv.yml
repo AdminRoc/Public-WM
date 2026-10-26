@@ -230,6 +230,12 @@ jobs:
                   "invalid key/value") echo "BWM 400 diagnostic: key/value contract rejected" ;;
                   "WM item catalog must use the bounded compressed format") echo "BWM 400 diagnostic: item compression wrapper rejected" ;;
                   "invalid KV JSON value") echo "BWM 400 diagnostic: item wrapper validation or decompression rejected" ;;
+                  "WM item validation failed: decompression") echo "BWM 400 diagnostic: Private-WM runtime rejected gzip decoding" ;;
+                  "WM item validation failed: integrity") echo "BWM 400 diagnostic: compressed catalog integrity check failed" ;;
+                  "WM item validation failed: metadata") echo "BWM 400 diagnostic: compressed catalog metadata or size rejected" ;;
+                  "WM item validation failed: base64") echo "BWM 400 diagnostic: compressed catalog base64 rejected" ;;
+                  "WM item validation failed: catalog") echo "BWM 400 diagnostic: decoded catalog identity or completeness rejected" ;;
+                  "WM item validation failed: validation") echo "BWM 400 diagnostic: compressed catalog validation failed" ;;
                   *) echo "BWM 400 diagnostic: unrecognized response; body withheld" ;;
                 esac
               fi
