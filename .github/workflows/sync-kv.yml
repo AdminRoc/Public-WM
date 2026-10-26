@@ -64,7 +64,7 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'test_wm_item_identity.py' -v
 
       - name: 测试 BWM 商品目录压缩封装与请求体上限
-        run: python3 -m unittest discover -s tests -p 'test_kv_payload.py' -v
+        run: node --test tests/kv_payload.test.mjs
 
       - name: 发布前核对物品清单与均价覆盖范围
         env:
@@ -206,7 +206,7 @@ jobs:
               bwm_payload="/tmp/kv-payload.json"
               if [ "$key" = "wm_items_json" ]; then
                 bwm_payload="/tmp/kv-payload-bwm.json"
-                if ! python3 .github/scripts/kv_payload.py --key "$key" --source "$src" --output "$bwm_payload"; then
+                if ! node .github/scripts/kv_payload.mjs --key "$key" --source "$src" --output "$bwm_payload"; then
                   echo "::error::BWM 商品目录未通过压缩封装校验；拒绝写入"
                   fail=1
                   bwm_payload=""
