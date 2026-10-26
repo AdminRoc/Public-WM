@@ -131,9 +131,3 @@ jobs:
         if: steps.commit.outputs.changed == 'true'
         run: |
           curl -s "https://purge.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/avg_prices_full.json" || true
-
-      - name: Dispatch KV sync after a changed average release
-        if: steps.commit.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run .github/workflows/sync-kv.yml --repo AdminRoc/Public-WM --ref main
