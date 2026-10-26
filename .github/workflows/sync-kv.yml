@@ -236,6 +236,8 @@ jobs:
                   "WM item validation failed: decompression_stage_constructor") echo "BWM 400 diagnostic: Private-WM failed to construct its gzip decoder" ;;
                   "WM item validation failed: decompression_stage_source") echo "BWM 400 diagnostic: Private-WM failed to create its gzip input stream" ;;
                   "WM item validation failed: decompression_stage_connection") echo "BWM 400 diagnostic: Private-WM failed to connect its gzip streams" ;;
+                  "WM item validation failed: decompression_stage_endpoints") echo "BWM 400 diagnostic: Private-WM failed to access gzip stream endpoints" ;;
+                  "WM item validation failed: decompression_stage_transfer") echo "BWM 400 diagnostic: Private-WM failed while transferring data through gzip streams" ;;
                   "WM item validation failed: decompression_stage_read") echo "BWM 400 diagnostic: Private-WM gzip stream failed while reading or decoding" ;;
                   "WM item validation failed: decompression_runtime_typeerror") echo "BWM 400 diagnostic: Private-WM gzip stream raised a runtime TypeError" ;;
                   "WM item validation failed: decompression_runtime_rangeerror") echo "BWM 400 diagnostic: Private-WM gzip stream raised a runtime RangeError" ;;
