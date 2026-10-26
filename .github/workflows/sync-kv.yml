@@ -63,6 +63,9 @@ jobs:
       - name: 测试 KV 发布的稳定 ID 连续性保护
         run: python3 -m unittest discover -s tests -p 'test_wm_item_identity.py' -v
 
+      - name: 测试 BWM 商品目录压缩封装与请求体上限
+        run: python3 -m unittest discover -s tests -p 'test_kv_payload.py' -v
+
       - name: 发布前核对物品清单与均价覆盖范围
         env:
           PRICE_DATA_SECRET: ${{ secrets.PRICE_DATA_SECRET }}
@@ -181,19 +184,30 @@ jobs:
             fi
             # 双写 BWM_KV（Private 私库无 Action，用公库顺带写，省 WM API）
             if [ -n "${BWM_KV_WRITE_TOKEN}" ] && [ -n "${BWM_UPDATE_URL}" ]; then
+              bwm_payload="/tmp/kv-payload.json"
+              if [ "$key" = "wm_items_json" ]; then
+                bwm_payload="/tmp/kv-payload-bwm.json"
+                if ! python3 .github/scripts/kv_payload.py --key "$key" --source "$src" --output "$bwm_payload"; then
+                  echo "::error::BWM 商品目录未通过压缩封装校验；拒绝写入"
+                  fail=1
+                  bwm_payload=""
+                fi
+              fi
               bwm_catalog_already_current=false
-              if [ "$key" = "wm_items_json" ] && verify_readback "https://boss.wfspeed.run/api/kv" "$key" "$src" "${BWM_KV_WRITE_TOKEN}"; then
+              if [ -n "$bwm_payload" ] && [ "$key" = "wm_items_json" ] && verify_readback "https://boss.wfspeed.run/api/kv" "$key" "$src" "${BWM_KV_WRITE_TOKEN}"; then
                 bwm_catalog_already_current=true
-                echo "BWM wm_items_json already matches the source; skipped oversized redundant write"
+                echo "BWM wm_items_json already matches the source; skipped redundant write"
               fi
               code2=""
-              if [ "$bwm_catalog_already_current" != true ]; then
+              if [ -z "$bwm_payload" ]; then
+                code2="payload-build-failed"
+              elif [ "$bwm_catalog_already_current" != true ]; then
                 for attempt in 1 2 3 4 5 6 7 8; do
                   code2=$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 20 --max-time 60 \
                     -X POST "${BWM_UPDATE_URL}" \
                     -H "Authorization: Bearer ${BWM_KV_WRITE_TOKEN}" \
                     -H "Content-Type: application/json" \
-                    --data-binary "@/tmp/kv-payload.json")
+                    --data-binary "@${bwm_payload}")
                   if [ "$code2" = "200" ]; then break; fi
                   echo "kv $key 第 $attempt 次写入 BWM HTTP $code2，稍后重试..."
                   if [ "$code2" = "413" ]; then break; fi
@@ -216,7 +230,7 @@ jobs:
             else
               echo "skip BWM 双写（未配 BWM_KV_WRITE_TOKEN/BWM_UPDATE_URL）"
             fi
-            rm -f /tmp/kv-payload.json
+            rm -f /tmp/kv-payload.json /tmp/kv-payload-bwm.json
             if [ "$key" = "avg_prices_full_json" ] && [ "$fail" != "0" ]; then
               echo "::error::均价写入或回读未通过；跳过后续目录清单发布，保留旧目录作为运行时版本标记" >&2
               break
