@@ -224,6 +224,15 @@ jobs:
                 -H "Content-Type: application/json" \
                 --data-binary "@${payload}" || true)
               if [ "$code" = "200" ]; then break; fi
+              if [ "$code" = "400" ]; then
+                case "$(cat "$response")" in
+                  "bad json") echo "BWM 400 diagnostic: request JSON rejected" ;;
+                  "invalid key/value") echo "BWM 400 diagnostic: key/value contract rejected" ;;
+                  "WM item catalog must use the bounded compressed format") echo "BWM 400 diagnostic: item compression wrapper rejected" ;;
+                  "invalid KV JSON value") echo "BWM 400 diagnostic: item wrapper validation or decompression rejected" ;;
+                  *) echo "BWM 400 diagnostic: unrecognized response; body withheld" ;;
+                esac
+              fi
               echo "BWM compatibility write returned HTTP $code; checking fresh readback before any retry"
               if verify_readback "$key" "$src"; then
                 echo "$key BWM compatibility value is already current; skipped replay"
