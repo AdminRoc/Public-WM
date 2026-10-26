@@ -233,6 +233,10 @@ jobs:
                   "WM item validation failed: decompression") echo "BWM 400 diagnostic: Private-WM runtime rejected gzip decoding" ;;
                   "WM item validation failed: decompression_api_unavailable") echo "BWM 400 diagnostic: Private-WM edge runtime lacks the required decompression API" ;;
                   "WM item validation failed: decompression_payload_rejected") echo "BWM 400 diagnostic: Private-WM rejected the gzip payload bytes" ;;
+                  "WM item validation failed: decompression_runtime_typeerror") echo "BWM 400 diagnostic: Private-WM gzip stream raised a runtime TypeError" ;;
+                  "WM item validation failed: decompression_runtime_rangeerror") echo "BWM 400 diagnostic: Private-WM gzip stream raised a runtime RangeError" ;;
+                  "WM item validation failed: decompression_runtime_syntaxerror") echo "BWM 400 diagnostic: Private-WM gzip stream raised a runtime SyntaxError" ;;
+                  "WM item validation failed: decompression_runtime_operationerror") echo "BWM 400 diagnostic: Private-WM gzip stream raised a runtime OperationError" ;;
                   "WM item validation failed: decompression_other") echo "BWM 400 diagnostic: Private-WM decompression failed for an unclassified runtime reason" ;;
                   "WM item validation failed: integrity") echo "BWM 400 diagnostic: compressed catalog integrity check failed" ;;
                   "WM item validation failed: metadata") echo "BWM 400 diagnostic: compressed catalog metadata or size rejected" ;;
