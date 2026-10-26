@@ -1,0 +1,23 @@
+{
+  "files": {
+    "auction-dicts.json": {
+      "bytes": 312933,
+      "sha256": "455fa646d11622860781e7cd0559e5c9fe02eea9dd631d68ed22ccbd9f242fe1"
+    },
+    "avg_prices_full.json": {
+      "bytes": 777856,
+      "sha256": "882e9d944a13d46938adecda55f05a4aea2295dd8ef2246272e89a50ffb4e7a9"
+    },
+    "wm-item-identities.json": {
+      "bytes": 266895,
+      "sha256": "8abccf48f57e410d5300b6f4d1be96a31223042c65e006cc3becf34928169713"
+    },
+    "wm-items.json": {
+      "bytes": 1825376,
+      "sha256": "f2c92ff78b9e2006588c136c78317e6616629b80ef8478fbbdfd25feb2ab58c6"
+    }
+  },
+  "release_id": "f8296e44365a538e15930ff0bf601eab2b1e91d22add62b290dc09e43c4ce2d5",
+  "repository": "AdminRoc/Public-WM",
+  "schema_version": 1
+}

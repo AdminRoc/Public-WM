@@ -1,9 +1,9 @@
-name: 同步数据到 EdgeOne KV
+name: 发布 Public-WM 指针并同步 Private-WM 兼容数据
 
-# 将本仓库 data/ 下的最新产物（均价/拍卖字典/物品总表）写入 EdgeOne Makers KV，
-# 前端经 market.wfspeed.run/api/kv?key=... 同源读取（大陆可达、实时、毫秒级），
-# 不再依赖 jsDelivr / raw / 反复构建部署的静态快照。
-# 需要仓库 Secrets：KV_WRITE_TOKEN（与边缘函数环境变量同值）。
+# PWM_KV 只保存已验证 SHA 固定 raw 数据集的短指针；旧 API 路径兼容读取器
+# 会从该不可变 release 读取并验 hash。Private-WM 的 BWM_KV 暂时保留原有双写，
+# 直到 Private-WM 消费端安全完成独立迁移。
+# 需要仓库 Secrets：KV_WRITE_TOKEN、BWM_KV_WRITE_TOKEN、BWM_UPDATE_URL、PRICE_DATA_SECRET。
 
 on:
   workflow_dispatch:
@@ -47,6 +47,8 @@ jobs:
         run: python3 .github/scripts/sync_run_guard.py
 
   sync:
+    permissions:
+      contents: write
     needs: sync_gate
     if: needs.sync_gate.outputs.do_sync == 'true'
     runs-on: ubuntu-latest
@@ -102,37 +104,60 @@ jobs:
           missing = set(slugs) - set(prices)
           if missing:
               raise SystemExit('average-price artifact does not cover the current WM item manifest')
-          print(f'KV release preflight passed: {len(slugs)} current items, {len(renames)} stable-ID slug changes, averages complete')
+          print(f'Public-WM release preflight passed: {len(slugs)} current items, {len(renames)} stable-ID slug changes, averages complete')
           PY
 
-      - name: 写入 EdgeOne KV（双写：PWM_KV + BWM_KV 省 Private 私库 Action）
+
+      - name: Build and commit immutable public release manifest
+        run: |
+          python3 .github/scripts/build_release_manifest.py
+          git add data/release-manifest.json
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "data: publish immutable WM release manifest"
+            git push origin HEAD:main
+          fi
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" || { echo "::error::Public-WM main advanced before release publication"; exit 1; }
+
+      - name: Update Private-WM compatibility data
         env:
-          KV_WRITE_TOKEN: ${{ secrets.KV_WRITE_TOKEN }}
           BWM_KV_WRITE_TOKEN: ${{ secrets.BWM_KV_WRITE_TOKEN }}
           BWM_UPDATE_URL: ${{ secrets.BWM_UPDATE_URL }}
           PRICE_DATA_SECRET: ${{ secrets.PRICE_DATA_SECRET }}
         run: |
-          set +e
-          fail=0
-          declare -A FILES=(
-            ["avg_prices_full_json"]="data/avg_prices_full.json"
-            ["auction_dicts_json"]="data/auction-dicts.json"
-            ["wm_items_json"]="data/wm-items.json"
+          set -euo pipefail
+          if [ -z "${BWM_KV_WRITE_TOKEN}" ] && [ -z "${BWM_UPDATE_URL}" ]; then
+            echo "BWM compatibility write is not configured; keeping its existing KV values untouched"
+            exit 0
+          fi
+          test -n "${BWM_KV_WRITE_TOKEN}" || { echo "::error::Missing BWM_KV_WRITE_TOKEN"; exit 1; }
+          test -n "${BWM_UPDATE_URL}" || { echo "::error::Missing BWM_UPDATE_URL"; exit 1; }
+          endpoint_ok=$(python3 - <<'PY'
+          import os
+          from urllib.parse import urlsplit
+          try:
+              endpoint = urlsplit(os.environ.get('BWM_UPDATE_URL', ''))
+              ok = endpoint.scheme == 'https' and endpoint.hostname == 'boss.wfspeed.run' and endpoint.path.rstrip('/') == '/api/update-kv'
+          except ValueError:
+              ok = False
+          print('true' if ok else 'false')
+          PY
           )
+          test "$endpoint_ok" = "true" || { echo "::error::BWM endpoint route check failed"; exit 1; }
+
           verify_readback() {
-            local endpoint="$1" key="$2" src="$3" token="${4:-}" expected code body
+            local key="$1" src="$2" expected body code
             expected=$(sha256sum "$src" | awk '{print $1}')
-            body="/tmp/${key}-readback-$(echo "$endpoint" | tr '/:' '__').json"
-            if [ -n "$token" ]; then
-              code=$(curl -sS -o "$body" -w "%{http_code}" --connect-timeout 20 --max-time 60 \
-                -H "Authorization: Bearer ${token}" "${endpoint}?key=${key}&verify=${expected}")
-            else
-              code=$(curl -sS -o "$body" -w "%{http_code}" --connect-timeout 20 --max-time 60 \
-                "${endpoint}?key=${key}&verify=${expected}")
-            fi
+            body="/tmp/${key}-bwm-readback.json"
+            code=$(curl -sS -o "$body" -w "%{http_code}" --connect-timeout 20 --max-time 60 \
+              -H "Authorization: Bearer ${BWM_KV_WRITE_TOKEN}" \
+              "https://boss.wfspeed.run/api/kv?key=${key}&verify=${expected}" || true)
             if [ "$code" != "200" ]; then
-              echo "$key KV readback HTTP $code from ${endpoint}" >&2
-              return 1
+              echo "$key BWM compatibility readback HTTP $code" >&2
+              if [ "$code" = "404" ]; then return 1; fi
+              return 2
             fi
             if ! python3 - "$key" "$src" "$body" <<'PY'
           import json, pathlib, sys
@@ -147,135 +172,86 @@ jobs:
               if expected_plain is not None:
                   candidates.append(expected_plain)
           if not any(actual == candidate for candidate in candidates):
-              raise SystemExit(1)
+              raise SystemExit('BWM compatibility value mismatch')
           PY
             then
-              echo "$key KV readback value mismatch from ${endpoint}" >&2
               return 1
             fi
-            echo "$key KV readback value verified: ${endpoint}"
+            echo "$key BWM compatibility readback verified"
             rm -f "$body"
           }
-          bwm_endpoint_ok=false
-          if [ -n "${BWM_UPDATE_URL}" ]; then
-            bwm_endpoint_ok=$(python3 - <<'PY'
-          import os
-          from urllib.parse import urlsplit
-          try:
-              endpoint = urlsplit(os.environ.get('BWM_UPDATE_URL', ''))
-              matches = endpoint.scheme == 'https' and endpoint.hostname == 'boss.wfspeed.run' and endpoint.path.rstrip('/') == '/api/update-kv'
-          except ValueError:
-              matches = False
-          print('true' if matches else 'false')
-          PY
-            )
-            if [ "$bwm_endpoint_ok" = "true" ]; then
-              echo "BWM endpoint matches the deployed Private-WM writer route"
-            else
-              echo "BWM endpoint route check failed; no BWM writes will be attempted"
-            fi
-          fi
-          # Price data first; the catalog manifest is the visible release marker and must be last.
+
+          declare -A FILES=(
+            ["avg_prices_full_json"]="data/avg_prices_full.json"
+            ["auction_dicts_json"]="data/auction-dicts.json"
+            ["wm_items_json"]="data/wm-items.json"
+          )
           for key in avg_prices_full_json auction_dicts_json wm_items_json; do
             src="${FILES[$key]}"
-            test -f "$src" || { echo "::error::缺少 KV 源文件 $src"; exit 1; }
-            python3 -c "import json,sys; json.load(open(sys.argv[1],encoding='utf-8'))" "$src" || exit 1
+            test -f "$src" || { echo "::error::Missing BWM source $src"; exit 1; }
+            python3 -c "import json,sys; json.load(open(sys.argv[1],encoding='utf-8'))" "$src"
           done
+
           for key in avg_prices_full_json auction_dicts_json wm_items_json; do
             src="${FILES[$key]}"
-            python3 -c "import json; content=open('$src').read(); open('/tmp/kv-payload.json','w').write(json.dumps({'key':'$key','value':content}))"
+            if [ "$key" = "wm_items_json" ] && verify_readback "$key" "$src"; then
+              echo "BWM wm_items_json already matches source; skipped redundant write"
+              continue
+            fi
+            payload="/tmp/${key}-bwm-payload.json"
+            if [ "$key" = "wm_items_json" ]; then
+              node .github/scripts/kv_payload.mjs --key "$key" --source "$src" --output "$payload"
+            else
+              python3 - "$key" "$src" "$payload" <<'PY'
+          import json, pathlib, sys
+          key, source, output = sys.argv[1:]
+          value = pathlib.Path(source).read_text(encoding='utf-8')
+          pathlib.Path(output).write_text(json.dumps({'key': key, 'value': value}, separators=(',', ':')), encoding='utf-8')
+          PY
+            fi
             code=""
+            response="/tmp/${key}-bwm-response.txt"
+            verified_current=false
             for attempt in 1 2 3 4 5 6 7 8; do
-              code=$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 20 --max-time 60 \
-                -X POST "https://market.wfspeed.run/api/update-kv" \
-                -H "Authorization: Bearer ${KV_WRITE_TOKEN}" \
+              code=$(curl -sS -o "$response" -w "%{http_code}" --connect-timeout 20 --max-time 60 \
+                -X POST "${BWM_UPDATE_URL}" \
+                -H "Authorization: Bearer ${BWM_KV_WRITE_TOKEN}" \
                 -H "Content-Type: application/json" \
-                --data-binary "@/tmp/kv-payload.json")
+                --data-binary "@${payload}" || true)
               if [ "$code" = "200" ]; then break; fi
-              echo "kv $key 第 $attempt 次写入 PWM HTTP $code，稍后重试..."
+              echo "BWM compatibility write returned HTTP $code; checking fresh readback before any retry"
+              if verify_readback "$key" "$src"; then
+                echo "$key BWM compatibility value is already current; skipped replay"
+                code="200"
+                verified_current=true
+                break
+              else
+                readback_status=$?
+              fi
+              if [ "$readback_status" -ne 1 ]; then
+                echo "::error::BWM write outcome is uncertain and readback unavailable; refusing replay for $key"
+                exit 1
+              fi
+              case "$code" in
+                400|401|403|404|405|413|422)
+                  echo "BWM returned non-retryable HTTP $code for $key" >&2
+                  break
+                  ;;
+              esac
+              echo "BWM compatibility write attempt $attempt returned HTTP $code"
               if [ "$attempt" -lt 8 ]; then sleep 20; fi
             done
-            echo "kv $key <- $src -> PWM HTTP $code"
             if [ "$code" != "200" ]; then
-              fail=1
-            else
-              verify_readback "https://market.wfspeed.run/api/kv" "$key" "$src" || fail=1
+              echo "::error::BWM compatibility write failed for $key (HTTP $code)"
+              exit 1
             fi
-            # 双写 BWM_KV（Private 私库无 Action，用公库顺带写，省 WM API）
-            if [ -n "${BWM_KV_WRITE_TOKEN}" ] && [ -n "${BWM_UPDATE_URL}" ] && [ "$bwm_endpoint_ok" = "true" ]; then
-              bwm_payload="/tmp/kv-payload.json"
-              if [ "$key" = "wm_items_json" ]; then
-                bwm_payload="/tmp/kv-payload-bwm.json"
-                if ! node .github/scripts/kv_payload.mjs --key "$key" --source "$src" --output "$bwm_payload"; then
-                  echo "::error::BWM 商品目录未通过压缩封装校验；拒绝写入"
-                  fail=1
-                  bwm_payload=""
-                fi
-              fi
-              bwm_catalog_already_current=false
-              if [ -n "$bwm_payload" ] && [ "$key" = "wm_items_json" ] && verify_readback "https://boss.wfspeed.run/api/kv" "$key" "$src" "${BWM_KV_WRITE_TOKEN}"; then
-                bwm_catalog_already_current=true
-                echo "BWM wm_items_json already matches the source; skipped redundant write"
-              fi
-              code2=""
-              if [ -z "$bwm_payload" ]; then
-                code2="payload-build-failed"
-              elif [ "$bwm_catalog_already_current" != true ]; then
-                bwm_response="/tmp/${key}-bwm-response.txt"
-                for attempt in 1 2 3 4 5 6 7 8; do
-                  code2=$(curl -sS -o "$bwm_response" -w "%{http_code}" --connect-timeout 20 --max-time 60 \
-                    -X POST "${BWM_UPDATE_URL}" \
-                    -H "Authorization: Bearer ${BWM_KV_WRITE_TOKEN}" \
-                    -H "Content-Type: application/json" \
-                    --data-binary "@${bwm_payload}")
-                  if [ "$code2" = "200" ]; then break; fi
-                  case "$code2" in
-                    400)
-                      response=$(cat "$bwm_response" 2>/dev/null || true)
-                      case "$response" in
-                        "bad json"|"invalid key/value"|"invalid KV JSON value"|"WM item catalog must use the bounded compressed format")
-                          echo "BWM HTTP 400 validation response: $response" >&2
-                          ;;
-                        *)
-                          echo "BWM returned HTTP 400; response body omitted" >&2
-                          ;;
-                      esac
-                      break
-                      ;;
-                    401|403|404|405|413|422)
-                      echo "BWM returned non-retryable HTTP $code2" >&2
-                      break
-                      ;;
-                  esac
-                  echo "kv $key 第 $attempt 次写入 BWM HTTP $code2，稍后重试..."
-                  if [ "$attempt" -lt 8 ]; then sleep 20; fi
-                done
-              else
-                code2="200"
-              fi
-              echo "kv $key <- $src -> BWM HTTP $code2"
-              if [ "$code2" != "200" ]; then
-                if [ "$code2" = "413" ] && verify_readback "https://boss.wfspeed.run/api/kv" "$key" "$src" "${BWM_KV_WRITE_TOKEN}"; then
-                  echo "BWM $key write was rejected as oversized, but a fresh readback confirms the expected value; not replaying"
-                else
-                  echo "::error::BWM 写入 $key 失败 HTTP $code2（PWM 写入继续，最终 run 标记失败）"
-                  fail=1
-                fi
-              elif [ "$bwm_catalog_already_current" != true ]; then
-                verify_readback "https://boss.wfspeed.run/api/kv" "$key" "$src" "${BWM_KV_WRITE_TOKEN}" || fail=1
-              fi
-            else
-              if [ -n "${BWM_KV_WRITE_TOKEN}" ] && [ -n "${BWM_UPDATE_URL}" ]; then
-                echo "::error::BWM endpoint did not match the deployed Private-WM writer route"
-                fail=1
-              else
-                echo "skip BWM 双写（未配 BWM_KV_WRITE_TOKEN/BWM_UPDATE_URL）"
-              fi
+            if [ "$verified_current" != true ]; then
+              verify_readback "$key" "$src"
             fi
-            rm -f /tmp/kv-payload.json /tmp/kv-payload-bwm.json "/tmp/${key}-bwm-response.txt"
-            if [ "$key" = "avg_prices_full_json" ] && [ "$fail" != "0" ]; then
-              echo "::error::均价写入或回读未通过；跳过后续目录清单发布，保留旧目录作为运行时版本标记" >&2
-              break
-            fi
+            rm -f "$payload" "$response"
           done
-          if [ "$fail" != "0" ]; then echo "存在 PWM/BWM KV 写入失败，请检查对应令牌与边缘函数部署"; exit 1; fi
+
+      - name: Publish and verify the small PWM release pointer
+        env:
+          KV_WRITE_TOKEN: ${{ secrets.KV_WRITE_TOKEN }}
+        run: python3 .github/scripts/publish_release_pointer.py

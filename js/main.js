@@ -78,13 +78,8 @@ function itemName(o) {
   return o._name || o.item?.en || o.item?.en_name || o.item?.name || o._slug || '';
 }
 
-/* ──────────────────────────────────────────────────────────
-   加载物品总表（经 jsDelivr 读取本仓库 data/wm-items.json 产物，带 raw 回退；
-   不再调用边缘函数，避免边缘函数拉取大体积物品表）
-─────────────────────────────────────────────────────────── */
-const WM_ITEMS_CDN = 'https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/wm-items.json';
-const WM_ITEMS_RAW = 'https://raw.githubusercontent.com/AdminRoc/Public-WM/main/data/wm-items.json';
-/* 物品表浏览器强缓存 10分钟强制覆盖：PWM_KV 单key整包，Public 同 Private 三层 */
+/* 加载提交 SHA 固定且逐文件校验的 Public-WM 物品总表。 */
+/* 物品表浏览器强缓存 10分钟强制覆盖；线上版本由 SHA 固定的 Public-WM release 提供。 */
 const _ITEMS_LS_KEY = 'bw_items_cache_json';
 const _ITEMS_LS_TS  = 'bw_items_ts';
 let _itemsPollTimer = null;
@@ -112,22 +107,16 @@ function _itemsSaveToCache(arr) {
   if(typeof requestIdleCallback==='function') requestIdleCallback(run,{timeout:2000}); else setTimeout(run,0);
 }
 async function _itemsFetchOnce() {
-  var ok=false;
-  await createReliableLoader(
-    ['/api/kv?key=wm_items_json', WM_ITEMS_CDN, WM_ITEMS_RAW, '/data/wm-items.json'],
-    function(j){
-      var arr = j && j.data ? j.data : j;
-      if (!Array.isArray(arr) || !arr.length) return false;
-      _items = arr;
-      _radialItemTagIndex = null;
-      _itemsSaveToCache(arr);
-      ok=true;
-      _refreshLoadedOrderItems();
-      return true;
-    },
-    { retryDelay: 2500, fetchTimeout: 7000 }
-  ).promise;
-  return ok;
+  try {
+    var doc = await window.PWM_RELEASE_DATA.load('wm-items.json');
+    var arr = doc && doc.data ? doc.data : doc;
+    if (!Array.isArray(arr) || !arr.length) return false;
+    _items = arr;
+    _radialItemTagIndex = null;
+    _itemsSaveToCache(arr);
+    _refreshLoadedOrderItems();
+    return true;
+  } catch (_) { return false; }
 }
 async function loadItems() {
   var hadCache = _itemsLoadFromCache();
@@ -226,16 +215,8 @@ function _refreshLoadedOrderItems() {
   try { render(); } catch (_) {}
 }
 
-/* ──────────────────────────────────────────────────────────
-   预加载全量均价（启动时经 jsDelivr 读取本仓库 static data 产物）
-   jsDelivr 回源 GitHub 免费 CDN、带 Access-Control-Allow-Origin:*，
-   浏览器同源直取，不占用 Worker 流量。产物由本仓库
-   .github/workflows/refresh-avg-prices.yml 每小时刷新提交。
-   新仓库刚创建时 jsDelivr 索引有延迟，自动回退 raw.githubusercontent。
-─────────────────────────────────────────────────────────── */
-const AVG_PRICES_CDN = 'https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/avg_prices_full.json';
-const AVG_PRICES_RAW = 'https://raw.githubusercontent.com/AdminRoc/Public-WM/main/data/avg_prices_full.json';
-/* 均价长缓存 + 10分钟后台覆盖：内存 _avgCache → localStorage 30天 → KV/cdn/raw */
+/* 预加载与物品总表处于同一 SHA 固定发布中的均价数据。 */
+/* 均价长缓存 + 10分钟后台覆盖：内存 _avgCache → localStorage 30天 → 已校验的 SHA 固定 release */
 const _AVG_LS_KEY = 'bw_avg_cache_json';
 const _AVG_LS_TS  = 'bw_avg_ts';
 let _avgPollTimer = null;
@@ -278,20 +259,15 @@ function _avgApplyAndRender(data, fromCache) {
   return true;
 }
 async function _avgFetchOnce() {
-  var ok = false;
-  await createReliableLoader(
-    ['/api/kv?key=avg_prices_full_json', AVG_PRICES_CDN, AVG_PRICES_RAW, '/data/avg_prices_full.json'],
-    function(data){ var r=_avgApplyAndRender(data,false); if(r) ok=true; return r; },
-    { retryDelay: 2500, fetchTimeout: 7000 }
-  ).promise;
-  return ok;
+  try { return _avgApplyAndRender(await window.PWM_RELEASE_DATA.load('avg_prices_full.json'), false); }
+  catch (_) { return false; }
 }
 async function preloadAvgPrices() {
   var hadCache = _avgLoadFromCache();
   if (hadCache) {
     setTimeout(function(){ _avgFetchOnce(); }, 500);
   } else {
-    await _avgFetchOnce();
+    while (!(await _avgFetchOnce())) await sleep(document.hidden ? 30000 : 2500);
   }
   if (_avgPollTimer) clearInterval(_avgPollTimer);
   _avgPollTimer = setInterval(function(){

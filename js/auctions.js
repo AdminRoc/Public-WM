@@ -210,7 +210,7 @@ const ATTR_ZH = {
 /* ── 字典加载 ── */
 async function loadDict(name) {
   if (_dicts[name]) return _dicts[name];
-  const j = await apiFetch('/auctions/dict/' + name);
+  const j = await window.PWM_RELEASE_DATA.load('auction-dicts.json');
   let arr = [];
   if (j) {
     const p = j.payload || j.data || j;

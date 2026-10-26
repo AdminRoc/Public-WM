@@ -85,13 +85,12 @@ function _qItemsLoadFromCache(){
 }
 function _qItemsSave(arr){ try{ localStorage.setItem(_Q_ITEMS_LS_KEY,JSON.stringify(arr)); localStorage.setItem(_Q_ITEMS_LS_TS,String(Date.now())); }catch(e){ try{ localStorage.removeItem(_Q_ITEMS_LS_KEY); localStorage.setItem(_Q_ITEMS_LS_KEY,JSON.stringify(arr)); localStorage.setItem(_Q_ITEMS_LS_TS,String(Date.now())); }catch(_){} } }
 async function _qItemsFetchOnce(){
-  var ok=false;
-  await createReliableLoader(
-    ['https://market.wfspeed.run/api/kv?key=wm_items_json','https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/wm-items.json','https://raw.githubusercontent.com/AdminRoc/Public-WM/main/data/wm-items.json','/api/kv?key=wm_items_json','/data/wm-items.json'],
-    function(j){ var arr=j&&j.data?j.data:j; if(!Array.isArray(arr)||!arr.length) return false; _qItems=arr; _qItemsSave(arr); ok=true; return true; },
-    {retryDelay:2500,fetchTimeout:7000}
-  ).promise;
-  return ok;
+  try {
+    var j=await window.PWM_RELEASE_DATA.load('wm-items.json');
+    var arr=j&&j.data?j.data:j;
+    if(!Array.isArray(arr)||!arr.length) return false;
+    _qItems=arr; _qItemsSave(arr); return true;
+  } catch(_){ return false; }
 }
 function _qLoadItems() {
   if (_qItems) return Promise.resolve(_qItems);
@@ -100,8 +99,8 @@ function _qLoadItems() {
     if(!_qItemsPollTimer){ _qItemsPollTimer=setInterval(function(){ if(!document.hidden) _qItemsFetchOnce(); },10*60*1000); document.addEventListener('visibilitychange', function(){ if(!document.hidden){ try{ var ts=parseInt(localStorage.getItem(_Q_ITEMS_LS_TS)||'0',10); if(Date.now()-ts>10*60*1000) _qItemsFetchOnce(); }catch(_){} } }); }
     return Promise.resolve(_qItems);
   }
-  // Public 走 PWM_KV 单key整包（同 main.js），不走 pwm-api 的 /items（404）
-  return _qItemsFetchOnce().then(function(ok){ if(ok && _qItems && _qItems.length) return _qItems; throw new Error('items load failed'); }).catch(function(e){ _qItems=[]; throw e; });
+  function retry(){ return _qItemsFetchOnce().then(function(ok){ if(ok && _qItems && _qItems.length) return _qItems; return new Promise(function(resolve){ setTimeout(resolve,document.hidden?30000:2500); }).then(retry); }); }
+  return retry().catch(function(e){ _qItems=[]; throw e; });
 }
 function _qLoadOrders() {
   return apiFetch('/orders').then(function(j) {
@@ -127,15 +126,13 @@ function _qLoadOrders() {
 }
 let _qAvgPollTimer=null;
 async function _qAvgFetchOnce(){
-  var urls=['https://market.wfspeed.run/api/kv?key=avg_prices_full_json','https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/avg_prices_full.json','https://raw.githubusercontent.com/AdminRoc/Public-WM/main/data/avg_prices_full.json','/data/avg_prices_full.json','/api/wm/avg-prices'];
-  var ok=false;
-  await createReliableLoader(urls,function(j){
+  try {
+    var j=await window.PWM_RELEASE_DATA.load('avg_prices_full.json');
     if (j && j.data && typeof j.data === 'object' && !Array.isArray(j.data)) j=j.data;
     if (!j || typeof j !== 'object' || j.ct || !Object.keys(j).length) return false;
     _qAvg=j; try{ localStorage.setItem('bw_avg_cache_json',JSON.stringify(j)); localStorage.setItem('bw_avg_ts',String(Date.now())); }catch(_){}
-    ok=true; return true;
-  },{fetchTimeout:7000}).promise;
-  return ok;
+    return true;
+  } catch(_){ return false; }
 }
 function _qLoadAvg() {
   if (_qAvg) return Promise.resolve(_qAvg);
@@ -145,20 +142,9 @@ function _qLoadAvg() {
     var ts = parseInt(localStorage.getItem('bw_avg_ts')||'0',10);
     if (raw && ts) { var j = JSON.parse(raw); if (j && !j.ct && Object.keys(j).length > 10) { _qAvg = j; setTimeout(function(){ _qAvgFetchOnce(); },800); if(!_qAvgPollTimer){ _qAvgPollTimer=setInterval(function(){ if(!document.hidden) _qAvgFetchOnce(); },10*60*1000); document.addEventListener('visibilitychange', function(){ if(!document.hidden){ try{ var ts2=parseInt(localStorage.getItem('bw_avg_ts')||'0',10); if(Date.now()-ts2>10*60*1000) _qAvgFetchOnce(); }catch(_){} } }); } return Promise.resolve(_qAvg); } }
   } catch(e) {}
-  var urls = [
-    'https://market.wfspeed.run/api/kv?key=avg_prices_full_json',
-    'https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/avg_prices_full.json',
-    'https://raw.githubusercontent.com/AdminRoc/Public-WM/main/data/avg_prices_full.json',
-    '/data/avg_prices_full.json'
-  ];
-  // 走 shared.js 的严密解密+超时可靠加载器，包装自动解密，失败自动重试至成功，成功后启动10分钟强制覆盖
-  return createReliableLoader(urls, function(j){
-    if (j && j.data && typeof j.data === 'object' && !Array.isArray(j.data)) j = j.data;
-    if (!j || typeof j !== 'object' || j.ct || !Object.keys(j).length) return false;
-    _qAvg = j;
-    try{ localStorage.setItem('bw_avg_cache_json', JSON.stringify(j)); localStorage.setItem('bw_avg_ts', String(Date.now())); }catch(_){}
-    return true;
-  }, { fetchTimeout: 7000 }).promise.then(function(){ if(!_qAvgPollTimer){ _qAvgPollTimer=setInterval(function(){ if(!document.hidden) _qAvgFetchOnce(); },10*60*1000); } return _qAvg || {}; });
+  // Release helper verifies the immutable SHA-pinned artifact; retry transient fetch failures.
+  function retry(){ return _qAvgFetchOnce().then(function(ok){ if(ok){ if(!_qAvgPollTimer){ _qAvgPollTimer=setInterval(function(){ if(!document.hidden) _qAvgFetchOnce(); },10*60*1000); } return _qAvg||{}; } return new Promise(function(resolve){ setTimeout(resolve,document.hidden?30000:2500); }).then(retry); }); }
+  return retry();
 }
 
 function _qAvgOf(slug) { return (_qAvg && _qAvg[slug]) || null; }
