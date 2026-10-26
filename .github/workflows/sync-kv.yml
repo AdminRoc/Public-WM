@@ -231,6 +231,9 @@ jobs:
                   "WM item catalog must use the bounded compressed format") echo "BWM 400 diagnostic: item compression wrapper rejected" ;;
                   "invalid KV JSON value") echo "BWM 400 diagnostic: item wrapper validation or decompression rejected" ;;
                   "WM item validation failed: decompression") echo "BWM 400 diagnostic: Private-WM runtime rejected gzip decoding" ;;
+                  "WM item validation failed: decompression_api_unavailable") echo "BWM 400 diagnostic: Private-WM edge runtime lacks the required decompression API" ;;
+                  "WM item validation failed: decompression_payload_rejected") echo "BWM 400 diagnostic: Private-WM rejected the gzip payload bytes" ;;
+                  "WM item validation failed: decompression_other") echo "BWM 400 diagnostic: Private-WM decompression failed for an unclassified runtime reason" ;;
                   "WM item validation failed: integrity") echo "BWM 400 diagnostic: compressed catalog integrity check failed" ;;
                   "WM item validation failed: metadata") echo "BWM 400 diagnostic: compressed catalog metadata or size rejected" ;;
                   "WM item validation failed: base64") echo "BWM 400 diagnostic: compressed catalog base64 rejected" ;;
