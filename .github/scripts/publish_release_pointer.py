@@ -53,6 +53,9 @@ def verify_pointer_after_write(expected, attempts=5, delay=2):
     for attempt in range(attempts):
         try:
             actual = current_pointer()
+        except urllib.error.HTTPError as error:
+            if error.code < 500 or attempt + 1 == attempts:
+                raise
         except (urllib.error.URLError, TimeoutError, socket.timeout):
             if attempt + 1 == attempts:
                 raise
