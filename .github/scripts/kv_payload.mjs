@@ -2,7 +2,6 @@
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { gzipSync } from 'node:zlib';
 
 export const ALLOWED_KEYS = new Set([
   'avg_prices_full_json',
@@ -38,6 +37,38 @@ function validateItems(document) {
   return items;
 }
 
+async function gzipBytes(sourceBytes) {
+  if (typeof CompressionStream !== 'function') {
+    throw new Error('Node runtime does not provide CompressionStream');
+  }
+  const reader = new Blob([sourceBytes]).stream()
+    .pipeThrough(new CompressionStream('gzip'))
+    .getReader();
+  const chunks = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_STORED_VALUE_BYTES) {
+        await reader.cancel();
+        throw new Error('WM item compressed value exceeds the conservative provider limit');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const output = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return output;
+}
+
 export async function buildPayload(key, raw) {
   if (!ALLOWED_KEYS.has(key)) {
     throw new Error('KV key is outside the fixed WM data allowlist');
@@ -51,10 +82,7 @@ export async function buildPayload(key, raw) {
     if (sourceBytes.byteLength > MAX_UNCOMPRESSED_BYTES) {
       throw new Error('WM item catalog exceeds the decompressed size limit');
     }
-    const compressed = gzipSync(sourceBytes, { level: 9 });
-    if (compressed.byteLength > MAX_STORED_VALUE_BYTES) {
-      throw new Error('WM item compressed value exceeds the conservative provider limit');
-    }
+    const compressed = await gzipBytes(sourceBytes);
     value = JSON.stringify({
       format: WM_ITEMS_FORMAT,
       sha256: createHash('sha256').update(sourceBytes).digest('hex'),
