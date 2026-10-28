@@ -5,8 +5,8 @@
       "sha256": "455fa646d11622860781e7cd0559e5c9fe02eea9dd631d68ed22ccbd9f242fe1"
     },
     "avg_prices_full.json": {
-      "bytes": 777048,
-      "sha256": "d4e205ab5e36a228166db796ae3d198303c6f65a0a42da238b6acfcaefe846d7"
+      "bytes": 773496,
+      "sha256": "58e28788ec925546b27abe54c19f6d356e80ac5d8d98995ae85613e196fd68a5"
     },
     "wm-item-identities.json": {
       "bytes": 266960,
@@ -17,7 +17,7 @@
       "sha256": "5e5068dea542b27a27052b2f84fd8d1d7d04c8981a0ae56a54deda20540e014f"
     }
   },
-  "release_id": "67cf2f9b06c5c54a1e54eaeecdc82272c2900aeb2a3101a1998074d41db562c7",
+  "release_id": "80fe2ec3b20760dc14968637cf4a1c73ef789b7ff6617247a1a5e8e9f5399d02",
   "repository": "AdminRoc/Public-WM",
   "schema_version": 1
 }
