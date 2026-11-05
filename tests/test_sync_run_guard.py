@@ -26,12 +26,12 @@ class SyncRunGuardTests(unittest.TestCase):
         )
         self.assertTrue(run)
 
-    def test_successful_auction_producer_syncs(self):
+    def test_retired_auction_producer_does_not_sync(self):
         run, _ = should_sync(
             'workflow_run', '刷新拍卖字典', 'success',
             [{'name': 'harvest', 'conclusion': 'success'}],
         )
-        self.assertTrue(run)
+        self.assertFalse(run)
 
     def test_failed_parent_never_syncs(self):
         run, _ = should_sync(

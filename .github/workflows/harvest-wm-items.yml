@@ -4,19 +4,16 @@ name: 刷新物品总表
 # 脚本：.github/scripts/harvest_wm_items.py（无需额外依赖）。
 # 产物提交到 main 后，首页经 jsDelivr 引用：
 #   https://cdn.jsdelivr.net/gh/AdminRoc/Public-WM@main/data/wm-items.json
-# 前端直接加载，边缘函数不再拉取大体积表。频率提至每2小时（原每日一次过稀）。
+# 前端直接加载，边缘函数不再拉取大体积表；由 Core Worker 串行队列每 4 小时调度。
 
 on:
   workflow_dispatch:
     inputs:
       cf_schedule_fallback:
-        description: Mark as the hourly Cloudflare schedule fallback
+        description: Mark as a Core serial-scheduler dispatch
         type: boolean
         required: false
         default: false
-  schedule:
-    - cron: '11 */2 * * *'  # 错开整点调度高峰，仍每2小时刷新
-
 concurrency:
   group: harvest-wm-items
   cancel-in-progress: false

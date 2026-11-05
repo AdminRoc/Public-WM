@@ -10,7 +10,6 @@ from urllib.request import Request, urlopen
 
 PRODUCER_JOBS = {
     "刷新全量均价数据": "refresh",
-    "刷新拍卖字典": "harvest",
 }
 
 

@@ -34,11 +34,11 @@ from wm_item_identity import (
 
 DIRECT_URL  = "https://api.warframe.market"
 # 速率策略（遵循 WM 当前公开 API 的 3 req/s 上限）：
-# - 并发仅用于隐藏网络等待，不提高请求发起速率；全局 RateLimiter 限制到 3 req/s
+# - 单个在途请求，逐个访问 WM；全局 RateLimiter 仍限制请求发起间隔
 # - 3892 个物品理论最短约 22 分钟；整批超时/中断时保留上次已发布文件
 # - 启动随机延迟 0~3min：错开整点脉冲，但不破坏小时节奏（原 30min 会撞下个整点）
 # - 每 50 个 item 后额外休息 2~5s
-CONCURRENCY   = 12
+CONCURRENCY   = 1
 MAX_RPS       = 3.0
 MIN_DELAY     = 0.4
 MAX_DELAY     = 1.0
@@ -273,7 +273,7 @@ async def main():
     slugs  = [it["slug"] for it in items]
     # maxRank>0 才是真正可分级物品（mod/arcane 等）；0 或缺省视为不可分级，不算 avg_zero/avg_max
     max_ranks = {it["slug"]: (it.get("maxRank") or 0) for it in items}
-    print(f"共 {len(slugs)} 个物品，并发={CONCURRENCY}，限速下理论最短 {len(slugs)/MAX_RPS/60:.1f} 分钟（不含批次停顿与重试）")
+    print(f"共 {len(slugs)} 个物品，串行请求，限速下理论最短 {len(slugs)/MAX_RPS/60:.1f} 分钟（不含批次停顿与重试）")
 
     # 每次运行都全量重新拉取（不复用上次提交的旧文件作为跳过依据）。
     # 失败前不覆盖已发布清单；旧文件只作为 stale 回退数据源。

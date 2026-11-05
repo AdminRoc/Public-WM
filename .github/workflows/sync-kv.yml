@@ -11,7 +11,7 @@ on:
     # A new item catalog dispatches the average refresh. Publish the new item
     # manifest only after that full refresh succeeds, so KV never pairs it with
     # the previous slug-keyed average artifact.
-    workflows: ["刷新全量均价数据", "刷新拍卖字典"]
+    workflows: ["刷新全量均价数据"]
     types: [completed]
 
 concurrency:
