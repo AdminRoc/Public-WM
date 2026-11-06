@@ -51,7 +51,10 @@ jobs:
     needs: schedule_guard
     if: needs.schedule_guard.outputs.run_capture == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    # 3,892+ sequential requests with per-item jitter, batch pauses, startup jitter,
+    # and retries exceeded 55 minutes in repeated runs. Keep the old artifact safe
+    # on cancellation while allowing a complete rate-limited refresh to finish.
+    timeout-minutes: 90
     permissions:
       actions: write
       contents: write
